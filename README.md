@@ -1,4 +1,7 @@
-# instant_motion_tracking
+# Instant Motion Tracking
+
+This repository contains the Instant Motion Tracking project
+using MediaPipe.
 
 ## Source Code Headers
 
