@@ -1,5 +1,7 @@
 # Instant Motion Tracking
 
+**This is not an officially supported Google product.**
+
 This repository contains the Instant Motion Tracking project
 using MediaPipe.
 
