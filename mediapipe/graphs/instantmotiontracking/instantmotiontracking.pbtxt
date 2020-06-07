@@ -1,0 +1,13 @@
+# MediaPipe graph that displays the camera view, boilerplate template for a graph
+
+# Images coming into and out of the graph.
+input_stream: "input_video"
+output_stream: "input_video"
+
+# Nodes go here, example below for LuminanceCalculator (A component of SobelEdges)
+# node:{
+#  calculator: "LuminanceCalculator"
+#  input_stream: "input_video"
+#  output_stream: "luma_video"
+# }
+
