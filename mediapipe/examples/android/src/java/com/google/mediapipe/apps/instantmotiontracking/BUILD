@@ -43,7 +43,11 @@ cc_library(
 android_binary(
     name = "instantmotiontracking",
     assets = [
-	      "//mediapipe/graphs/instantmotiontracking:mobile.binarypb",
+	"//mediapipe/graphs/instantmotiontracking:mobile.binarypb",
+	"//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets:box.obj.uuu",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets:classic_colors.png",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/sneaker:model.obj.uuu",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/sneaker:texture.bmp",
     ],
     assets_dir = "",
     manifest = "AndroidManifest.xml",
@@ -54,7 +58,7 @@ android_binary(
         "cameraFacingFront": "False",
         "binaryGraphName": "mobile.binarypb",
         "inputVideoStreamName": "input_video",
-        "outputVideoStreamName": "input_video",
+        "outputVideoStreamName": "output_video",
     },
     multidex = "native",
     deps = [
