@@ -304,14 +304,7 @@ node: {
 }
 ```
 
-## Source Code Headers
-
-Every file containing source code must include copyright and license
-information. This includes any JS/CSS files that you might be serving out to
-browsers. (This is to help well-intentioned people avoid accidental copying that
-doesn't comply with the license.)
-
-Apache header:
+## Licensing & Use
 
     Copyright 2020 Google LLC
 
