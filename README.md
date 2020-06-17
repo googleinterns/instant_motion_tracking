@@ -39,6 +39,12 @@ It is also necessary move the Android source application to Mediapipe:
 mv instant_motion_tracking/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking mediapipe/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking
 ```
 
+Finally, due to BUILD dependency issues with related MediaPipe projects, you must change the visibility permissions of the object_tracking_3d calculators. Run the command below to copy the modified BUILD file to fix privacy issues between projects:
+
+```base
+mv instant_motion_tracking/mediapipe/graphs/instantmotiontracking/calculators/obj3d/BUILD mediapipe/mediapipe/graphs/object_detection_3d/calculators/BUILD
+```
+
 Now, navigate to the MediaPipe directory and run the following command to build the application with Bazel
 
 ```bash
