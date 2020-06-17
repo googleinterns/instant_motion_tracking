@@ -32,8 +32,15 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.graphics.Color;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.ImageView;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.constraintlayout.widget.ConstraintLayout;
+
 import com.google.mediapipe.components.CameraHelper;
 import com.google.mediapipe.components.CameraXPreviewHelper;
 import com.google.mediapipe.components.ExternalTextureConverter;
@@ -71,34 +78,19 @@ public class MainActivity extends AppCompatActivity {
   private ApplicationInfo applicationInfo;
 
   // Allows for automated packet transmission to graph
-  private MediapipePacketManager mPacketManager;
+  private MediaPipePacketManager mediaPipePacketManager;
 
   // Bounds for a single click (sticker anchor reset)
   private final long CLICK_DURATION = 300; // ms
   private long clickStartMillis = 0;
   private ConstraintLayout constraintLayout;
+  // Contains dynamic layout of sticker data controller
+  private LinearLayout buttonLayout;
 
-  // Sticker data management
-  ArrayList<Sticker> stickerList = new ArrayList<Sticker>();
-  // sticker_focus_value is index of sticker to update anchor positions for
-  int sticker_focus_value = -1;
-  // Current implementation uses one sticker
-  Sticker currentSticker;
-  // [roll,pitch,yaw] from IMU sensors
-  private float[] IMUData = new float[3];
+  private ArrayList<Sticker> stickerList;
+  private Sticker currentSticker; // Sticker being edited
 
-  // Define procedure for IMUData update
-  SensorManager sensorManager = null;
-  SensorEventListener sensorListener =
-      new SensorEventListener() {
-        public void onAccuracyChanged(Sensor sensor, int accuracy) {}
-
-        public void onSensorChanged(SensorEvent event) {
-          IMUData[0] = (float) Math.toRadians((event.values[1] + 180.0));
-          IMUData[1] = (float) Math.toRadians(event.values[2]);
-          IMUData[2] = (float) Math.toRadians(event.values[0]);
-        }
-      };
+  private float[] imuData = new float[3]; // [roll,pitch,yaw]
 
   // Assets for object rendering
   private Bitmap objTexture = null;
@@ -113,15 +105,6 @@ public class MainActivity extends AppCompatActivity {
 
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
-
-    stickerList.add(new Sticker());
-    currentSticker = stickerList.get(0);
-
-    // Define sensor properties (only get one orientation sensor)
-    sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-    List sensorList = sensorManager.getSensorList(Sensor.TYPE_ORIENTATION);
-    sensorManager.registerListener(
-        sensorListener, (Sensor) sensorList.get(0), SensorManager.SENSOR_DELAY_FASTEST);
 
     try {
       applicationInfo =
@@ -158,89 +141,182 @@ public class MainActivity extends AppCompatActivity {
     processor.setInputSidePackets(inputSidePackets);
 
     // Add frame listener to PacketManagement system
-    mPacketManager = new MediapipePacketManager();
-    processor.setOnWillAddFrameListener(mPacketManager);
+    mediaPipePacketManager = new MediaPipePacketManager();
+    processor.setOnWillAddFrameListener(mediaPipePacketManager);
 
-    // Mechanisms for zoom, pinch, rotation, tap gestures (Basic single object manipulation)
+    // Begin with 0 stickers in dataset
+    stickerList = new ArrayList<Sticker>();
+    currentSticker = null;
+
+    // Define sensor properties (only get one orientation sensor)
+    SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+    List sensorList = sensorManager.getSensorList(Sensor.TYPE_ORIENTATION);
+    sensorManager.registerListener(new SensorEventListener() {
+      public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+      // Update procedure on sensor adjustment (phone changes orientation)
+      public void onSensorChanged(SensorEvent event) {
+        imuData[0] = (float) Math.toRadians(event.values[1]);
+        imuData[1] = (float) Math.toRadians(event.values[2]);
+        imuData[2] = (float) Math.toRadians(event.values[0]);
+      }
+    },
+    (Sensor) sensorList.get(0), SensorManager.SENSOR_DELAY_FASTEST);
+
+    // Mechanisms for zoom, pinch, rotation, tap gestures (Basic single object manipulation
+    buttonLayout = (LinearLayout) findViewById(R.id.button_layout);
     constraintLayout = (ConstraintLayout) findViewById(R.id.constraint_layout);
     constraintLayout.setOnTouchListener(
         new ConstraintLayout.OnTouchListener() {
           public boolean onTouch(View v, MotionEvent event) {
-            switch (event.getAction()) {
+            if(currentSticker != null) {
+              switch (event.getAction()) {
                 // Detecting a single click for object re-anchoring
-              case (MotionEvent.ACTION_DOWN):
-                clickStartMillis = System.currentTimeMillis();
-                break;
-              case (MotionEvent.ACTION_UP):
-                if (System.currentTimeMillis() - clickStartMillis <= CLICK_DURATION) {
-                  float x = (event.getX() / constraintLayout.getWidth());
-                  float y = (event.getY() / constraintLayout.getHeight());
-                  currentSticker.setNewAnchor(x, y);
-                  sticker_focus_value = currentSticker.getStickerID();
-                }
-                break;
-                // Detecting a rotation or pinch/zoom gesture to manipulate the object
-              case (MotionEvent.ACTION_MOVE):
-                if (event.getPointerCount() == 2) {
-                  if (event.getHistorySize() > 1) {
-                    // Calculate objectScaling for dynamic scaling of rendered object
-                    float scaling_speed = 0.05f;
-                    double new_distance =
-                        distance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
-                    double old_distance =
-                        distance(
-                            event.getHistoricalX(0, 0),
-                            event.getHistoricalY(0, 0),
-                            event.getHistoricalX(1, 0),
-                            event.getHistoricalY(1, 0));
-                    float sign_float =
-                        (new_distance < old_distance)
-                            ? -scaling_speed
-                            : scaling_speed; // Are they moving towards each other?
-                    double dist1 =
-                        distance(
-                            event.getX(0),
-                            event.getY(0),
-                            event.getHistoricalX(0, 0),
-                            event.getHistoricalY(0, 0));
-                    double dist2 =
-                        distance(
-                            event.getX(1),
-                            event.getY(1),
-                            event.getHistoricalX(1, 0),
-                            event.getHistoricalY(1, 0));
-                    float scalingIncrement = sign_float * (float) (dist1 + dist2);
-                    currentSticker.setScaling(currentSticker.getScaling() + scalingIncrement);
-
-                    // calculate objectRotation (in degrees) for dynamic y-axis rotations
-                    float rotation_speed = 5.0f;
-                    float tangentA =
-                        (float)
-                            Math.atan2(
-                                event.getY(1) - event.getY(0), event.getX(1) - event.getX(0));
-                    float tangentB =
-                        (float)
-                            Math.atan2(
-                                event.getHistoricalY(1, 0) - event.getHistoricalY(0, 0),
-                                event.getHistoricalX(1, 0) - event.getHistoricalX(0, 0));
-                    float angle = ((float) Math.toDegrees(tangentA - tangentB)) % 360f;
-                    angle += ((angle < -180f) ? (+360f) : ((angle > 180f) ? -360f : 0.0f));
-                    float rotationIncrement = (float) (3.14 * ((angle * rotation_speed) / 180));
-                    currentSticker.setRotation(currentSticker.getRotation() + rotationIncrement);
+                case (MotionEvent.ACTION_DOWN):
+                  clickStartMillis = System.currentTimeMillis();
+                  break;
+                case (MotionEvent.ACTION_UP):
+                  if (System.currentTimeMillis() - clickStartMillis <= CLICK_DURATION) {
+                    float x = (event.getX() / constraintLayout.getWidth());
+                    float y = (event.getY() / constraintLayout.getHeight());
+                    currentSticker.setNewAnchor(x, y);
                   }
-                }
-                break;
+                  break;
+                // Detecting a rotation or pinch/zoom gesture to manipulate the object
+                case (MotionEvent.ACTION_MOVE):
+                  if (event.getPointerCount() == 2) {
+                    if (event.getHistorySize() > 1) {
+                      // Calculate user scaling of sticker
+                      float scaling_speed = 0.05f;
+                      double new_distance =
+                              distance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
+                      double old_distance =
+                              distance(
+                                      event.getHistoricalX(0, 0),
+                                      event.getHistoricalY(0, 0),
+                                      event.getHistoricalX(1, 0),
+                                      event.getHistoricalY(1, 0));
+                      float sign_float =
+                              (new_distance < old_distance)
+                                      ? -scaling_speed
+                                      : scaling_speed; // Are they moving towards each other?
+                      double dist1 =
+                              distance(
+                                      event.getX(0),
+                                      event.getY(0),
+                                      event.getHistoricalX(0, 0),
+                                      event.getHistoricalY(0, 0));
+                      double dist2 =
+                              distance(
+                                      event.getX(1),
+                                      event.getY(1),
+                                      event.getHistoricalX(1, 0),
+                                      event.getHistoricalY(1, 0));
+                      float scalingIncrement = sign_float * (float) (dist1 + dist2);
+                      currentSticker.setScaling(currentSticker.getScaling() + scalingIncrement);
+
+                      // calculate rotation (radians) for dynamic y-axis rotations
+                      float rotation_speed = 5.0f;
+                      float tangentA =
+                              (float)
+                                      Math.atan2(
+                                              event.getY(1) - event.getY(0), event.getX(1) - event.getX(0));
+                      float tangentB =
+                              (float)
+                                      Math.atan2(
+                                              event.getHistoricalY(1, 0) - event.getHistoricalY(0, 0),
+                                              event.getHistoricalX(1, 0) - event.getHistoricalX(0, 0));
+                      float angle = ((float) Math.toDegrees(tangentA - tangentB)) % 360f;
+                      angle += ((angle < -180f) ? (+360f) : ((angle > 180f) ? -360f : 0.0f));
+                      float rotationIncrement = (float) (3.14 * ((angle * rotation_speed) / 180));
+                      currentSticker.setRotation(currentSticker.getRotation() + rotationIncrement);
+                    }
+                  }
+                  break;
+              }
             }
             return true;
           }
         });
+    refreshUI();
   }
 
   public double distance(double x1, double y1, double x2, double y2) {
     return Math.sqrt((y2 - y1) * (y2 - y1) + (x2 - x1) * (x2 - x1));
   }
 
-  @Override
+  // Called whenever a button is clicked
+  public void refreshUI() {
+    if(currentSticker != null) { // No sticker in view
+        buttonLayout.removeAllViews();
+        ImageButton deleteSticker = new ImageButton(this);
+        setUIControlButtonDesign(deleteSticker, R.drawable.baseline_clear_24);
+        deleteSticker.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if(currentSticker != null) {
+                    stickerList.remove(currentSticker);
+                    currentSticker = null;
+                    refreshUI();
+                }
+            }
+        });
+        // Go to home sticker menu
+        ImageButton goBack = new ImageButton(this);
+        setUIControlButtonDesign(goBack, R.drawable.baseline_arrow_back_24);
+        goBack.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                currentSticker = null;
+                refreshUI();
+            }
+        });
+
+        buttonLayout.addView(deleteSticker);
+        buttonLayout.addView(goBack);
+    }
+    else {
+        buttonLayout.removeAllViews();
+        // Display stickers
+        for(final Sticker sticker:stickerList) {
+            final ImageButton stickerButton = new ImageButton(this);
+            stickerButton.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    currentSticker = sticker;
+                    refreshUI();
+                }
+            });
+            setStickerButtonDesign(stickerButton, R.drawable.chair_preview);
+            buttonLayout.addView(stickerButton);
+        }
+        ImageButton addSticker = new ImageButton(this);
+        setUIControlButtonDesign(addSticker, R.drawable.baseline_add_24);
+        addSticker.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                stickerList.add(new Sticker());
+                refreshUI();
+            }
+        });
+
+        buttonLayout.addView(addSticker);
+    }
+  }
+
+  // Sets ImageButton UI for Control Buttons (Delete, Add, Back)
+    public void setUIControlButtonDesign(ImageButton btn, int imageDrawable) {
+        btn.setImageDrawable(getResources().getDrawable(imageDrawable));
+        btn.setBackgroundColor(Color.parseColor("#00ffffff"));
+        btn.setLayoutParams(new LinearLayout.LayoutParams(200,200));
+        btn.setPadding(25,25,25,25);
+        btn.setScaleType(ImageView.ScaleType.FIT_XY);
+    }
+
+    // Sets ImageButton UI for Sticker Buttons
+    public void setStickerButtonDesign(ImageButton btn, int imageDrawable) {
+        btn.setImageDrawable(getResources().getDrawable(imageDrawable));
+        btn.setBackground(getResources().getDrawable(R.drawable.circle_button));
+        btn.setLayoutParams(new LinearLayout.LayoutParams(250,250));
+        btn.setPadding(25,25,25,25);
+        btn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+    }
+
   protected void onResume() {
     super.onResume();
     converter = new ExternalTextureConverter(eglManager.getContext());
@@ -350,28 +426,15 @@ public class MainActivity extends AppCompatActivity {
     }
   }
 
-  private class MediapipePacketManager implements FrameProcessor.OnWillAddFrameListener {
+  private class MediaPipePacketManager implements FrameProcessor.OnWillAddFrameListener {
     @Override
     public void onWillAddFrame(long timestamp) {
-      Packet stickerInFocusPacket =
-          processor
-              .getPacketCreator()
-              .createInt32(
-                  sticker_focus_value); // -1 if no sticker, else, sticker_id to change anchor
-      sticker_focus_value = -1; // Reset the sticker focus after values have been updated
-      Packet stickerDataPacket =
-          processor.getPacketCreator().createString(Sticker.stickerArrayListToRawData(stickerList));
-      Packet IMUDataPacket = processor.getPacketCreator().createFloat32Array(IMUData);
-      processor
-          .getGraph()
-          .addConsumablePacketToInputStream("sticker_in_focus", stickerInFocusPacket, timestamp);
-      processor
-          .getGraph()
-          .addConsumablePacketToInputStream("sticker_data_string", stickerDataPacket, timestamp);
-      processor.getGraph().addConsumablePacketToInputStream("imu_data", IMUDataPacket, timestamp);
-      stickerInFocusPacket.release();
+      Packet stickerDataPacket = processor.getPacketCreator().createString(Sticker.stickerArrayListToRawData(stickerList));
+      Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(imuData);
+      processor.getGraph().addConsumablePacketToInputStream("sticker_data_string", stickerDataPacket, timestamp);
+      processor.getGraph().addConsumablePacketToInputStream("imu_data", imuDataPacket, timestamp);
       stickerDataPacket.release();
-      IMUDataPacket.release();
+      imuDataPacket.release();
     }
   }
 }
