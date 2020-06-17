@@ -13,7 +13,7 @@ For overall context on instant motion tracking, please read this [Google Develop
 
 ## Android
 
-[Source - TODO](#)
+[Source](mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking)
 
 To build and install the app, the MediaPipe repository must first be cloned from Github:
 
