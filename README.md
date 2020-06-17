@@ -63,7 +63,7 @@ in order to perform anchor tracking for each individual 3d render (creating the 
 
 ### Main Graph
 
-[Source pbtxt file - TODO](#)
+[Source pbtxt file](mediapipe/graphs/instantmotiontracking/instantmotiontracking.pbtxt)
 
 ![main-graph-png](images/main-graph.png)
 
@@ -139,7 +139,7 @@ node {
 
 ![region_tracking_subgraph](images/anchor-tracking-subgraph.png)
 
-[Source pbtxt file - TODO](#)
+[Source pbtxt file](mediapipe/graphs/instantmotiontracking/subgraphs/region_tracking.pbtxt)
 
 ```bash
 # MediaPipe graph that performs region tracking on initial anchor positions
