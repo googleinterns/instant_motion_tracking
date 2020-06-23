@@ -43,8 +43,8 @@ cc_library(
 android_binary(
     name = "instantmotiontracking",
     assets = [
-	"//mediapipe/graphs/instantmotiontracking:mobile.binarypb",
-	"//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets:box.obj.uuu",
+      	"//mediapipe/graphs/instantmotiontracking:mobile.binarypb",
+      	"//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets:box.obj.uuu",
         "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets:classic_colors.png",
         "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/chair:model.obj.uuu",
         "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/chair:texture.bmp",
