@@ -215,7 +215,7 @@ public class MainActivity extends AppCompatActivity {
                             event.getHistoricalX(1, 0) - event.getHistoricalX(0, 0));
     float angle = ((float) Math.toDegrees(tangentA - tangentB)) % 360f;
     angle += ((angle < -180f) ? (+360f) : ((angle > 180f) ? -360f : 0.0f));
-    float rotationIncrement = (float) (3.14 * ((angle * rotation_speed) / 180));
+    float rotationIncrement = (float) (Math.PI * ((angle * rotation_speed) / 180));
     return rotationIncrement;
   }
 
