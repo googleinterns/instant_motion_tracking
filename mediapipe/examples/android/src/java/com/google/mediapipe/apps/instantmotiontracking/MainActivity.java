@@ -121,12 +121,12 @@ public class MainActivity extends AppCompatActivity {
     AndroidAssetUtil.initializeNativeAssetManager(this);
     eglManager = new EglManager(null);
     processor =
-        new FrameProcessor(
-            this,
-            eglManager.getNativeContext(),
-            applicationInfo.metaData.getString("binaryGraphName"),
-            applicationInfo.metaData.getString("inputVideoStreamName"),
-            applicationInfo.metaData.getString("outputVideoStreamName"));
+      new FrameProcessor(
+          this,
+          eglManager.getNativeContext(),
+          applicationInfo.metaData.getString("binaryGraphName"),
+          applicationInfo.metaData.getString("inputVideoStreamName"),
+          applicationInfo.metaData.getString("outputVideoStreamName"));
     processor.getVideoSurfaceOutput().setFlipY(FLIP_FRAMES_VERTICALLY);
     PermissionHelper.checkAndRequestCameraPermissions(this);
 
@@ -159,85 +159,101 @@ public class MainActivity extends AppCompatActivity {
         imuData[1] = (float) Math.toRadians(event.values[2]);
         imuData[2] = (float) Math.toRadians(event.values[0]);
       }
-    },
-    (Sensor) sensorList.get(0), SensorManager.SENSOR_DELAY_FASTEST);
+    }, (Sensor) sensorList.get(0), SensorManager.SENSOR_DELAY_FASTEST);
 
     // Mechanisms for zoom, pinch, rotation, tap gestures (Basic single object manipulation
     buttonLayout = (LinearLayout) findViewById(R.id.button_layout);
     constraintLayout = (ConstraintLayout) findViewById(R.id.constraint_layout);
     constraintLayout.setOnTouchListener(
-        new ConstraintLayout.OnTouchListener() {
-          public boolean onTouch(View v, MotionEvent event) {
-            if(currentSticker != null) {
-              switch (event.getAction()) {
-                // Detecting a single click for object re-anchoring
-                case (MotionEvent.ACTION_DOWN):
-                  clickStartMillis = System.currentTimeMillis();
-                  break;
-                case (MotionEvent.ACTION_UP):
-                  if (System.currentTimeMillis() - clickStartMillis <= CLICK_DURATION) {
-                    float x = (event.getX() / constraintLayout.getWidth());
-                    float y = (event.getY() / constraintLayout.getHeight());
-                    currentSticker.setNewAnchor(x, y);
-                  }
-                  break;
-                // Detecting a rotation or pinch/zoom gesture to manipulate the object
-                case (MotionEvent.ACTION_MOVE):
-                  if (event.getPointerCount() == 2) {
-                    if (event.getHistorySize() > 1) {
-                      // Calculate user scaling of sticker
-                      float scaling_speed = 0.05f;
-                      double new_distance =
-                              distance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
-                      double old_distance =
-                              distance(
-                                      event.getHistoricalX(0, 0),
-                                      event.getHistoricalY(0, 0),
-                                      event.getHistoricalX(1, 0),
-                                      event.getHistoricalY(1, 0));
-                      float sign_float =
-                              (new_distance < old_distance)
-                                      ? -scaling_speed
-                                      : scaling_speed; // Are they moving towards each other?
-                      double dist1 =
-                              distance(
-                                      event.getX(0),
-                                      event.getY(0),
-                                      event.getHistoricalX(0, 0),
-                                      event.getHistoricalY(0, 0));
-                      double dist2 =
-                              distance(
-                                      event.getX(1),
-                                      event.getY(1),
-                                      event.getHistoricalX(1, 0),
-                                      event.getHistoricalY(1, 0));
-                      float scalingIncrement = sign_float * (float) (dist1 + dist2);
-                      currentSticker.setScaling(currentSticker.getScaling() + scalingIncrement);
-
-                      // calculate rotation (radians) for dynamic y-axis rotations
-                      float rotation_speed = 5.0f;
-                      float tangentA =
-                              (float)
-                                      Math.atan2(
-                                              event.getY(1) - event.getY(0), event.getX(1) - event.getX(0));
-                      float tangentB =
-                              (float)
-                                      Math.atan2(
-                                              event.getHistoricalY(1, 0) - event.getHistoricalY(0, 0),
-                                              event.getHistoricalX(1, 0) - event.getHistoricalX(0, 0));
-                      float angle = ((float) Math.toDegrees(tangentA - tangentB)) % 360f;
-                      angle += ((angle < -180f) ? (+360f) : ((angle > 180f) ? -360f : 0.0f));
-                      float rotationIncrement = (float) (3.14 * ((angle * rotation_speed) / 180));
-                      currentSticker.setRotation(currentSticker.getRotation() + rotationIncrement);
-                    }
-                  }
-                  break;
-              }
-            }
-            return true;
-          }
-        });
+      new ConstraintLayout.OnTouchListener() {
+        public boolean onTouch(View v, MotionEvent event) {
+          return UITouchManager(event);
+        }
+      });
     refreshUI();
+  }
+
+  // Use MotionEvent properties to interpret taps/rotations/scales
+  public boolean UITouchManager(MotionEvent event) {
+    if(currentSticker != null) {
+      switch (event.getAction()) {
+        // Detecting a single click for object re-anchoring
+        case (MotionEvent.ACTION_DOWN):
+          clickStartMillis = System.currentTimeMillis();
+          break;
+        case (MotionEvent.ACTION_UP):
+          if (System.currentTimeMillis() - clickStartMillis <= CLICK_DURATION) { recordClick(event); }
+          break;
+        case (MotionEvent.ACTION_MOVE):
+          if (event.getPointerCount() == 2) {
+            if (event.getHistorySize() > 1) {
+              // Calculate user scaling of sticker
+              float scalingIncrement = calculateScalingDistance(event);
+              currentSticker.setScaling(currentSticker.getScaling() + scalingIncrement);
+              // calculate rotation (radians) for dynamic y-axis rotations
+              float rotationIncrement = calculateRotationRadians(event);
+              currentSticker.setRotation(currentSticker.getRotation() + rotationIncrement);
+            }
+          }
+          break;
+      }
+    }
+    return true;
+  }
+
+  // Given a MotionEvent with history > 2, calculate the radians of rotation between two fingers (+/-)
+  public float calculateRotationRadians(MotionEvent event) {
+    float rotation_speed = 5.0f;
+    float tangentA =
+            (float)
+                    Math.atan2(
+                            event.getY(1) - event.getY(0), event.getX(1) - event.getX(0));
+    float tangentB =
+            (float)
+                    Math.atan2(
+                            event.getHistoricalY(1, 0) - event.getHistoricalY(0, 0),
+                            event.getHistoricalX(1, 0) - event.getHistoricalX(0, 0));
+    float angle = ((float) Math.toDegrees(tangentA - tangentB)) % 360f;
+    angle += ((angle < -180f) ? (+360f) : ((angle > 180f) ? -360f : 0.0f));
+    float rotationIncrement = (float) (3.14 * ((angle * rotation_speed) / 180));
+    return rotationIncrement;
+  }
+
+  // Given a MotionEvent with history > 2, calculate the normalized distance of scaling between two fingers (+/-)
+  public float calculateScalingDistance(MotionEvent event) {
+    float scaling_speed = 0.05f;
+    double new_distance =
+            distance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
+    double old_distance =
+            distance(
+                    event.getHistoricalX(0, 0),
+                    event.getHistoricalY(0, 0),
+                    event.getHistoricalX(1, 0),
+                    event.getHistoricalY(1, 0));
+    float sign_float =
+            (new_distance < old_distance)
+                    ? -scaling_speed
+                    : scaling_speed; // Are they moving towards each other?
+    double dist1 =
+            distance(
+                    event.getX(0),
+                    event.getY(0),
+                    event.getHistoricalX(0, 0),
+                    event.getHistoricalY(0, 0));
+    double dist2 =
+            distance(
+                    event.getX(1),
+                    event.getY(1),
+                    event.getHistoricalX(1, 0),
+                    event.getHistoricalY(1, 0));
+    float scalingIncrement = sign_float * (float) (dist1 + dist2);
+    return scalingIncrement;
+  }
+
+  public void recordClick(MotionEvent event) {
+    float x = (event.getX() / constraintLayout.getWidth());
+    float y = (event.getY() / constraintLayout.getHeight());
+    currentSticker.setNewAnchor(x, y);
   }
 
   public double distance(double x1, double y1, double x2, double y2) {

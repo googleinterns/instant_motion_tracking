@@ -57,6 +57,12 @@ Once the app is built, install it on an Android device with:
 adb install bazel-bin/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/instantmotiontracking.apk
 ```
 
+If you are reinstalling the application via adb, use '-r' to maintain the previous application data:
+
+```bash
+adb install -r bazel-bin/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/instantmotiontracking.apk
+```
+
 ## Graph
 The instant motion tracking [main graph](#main-graph) internally utilizes a [region tracking subgraph](#region-tracking-subgraph)
 in order to perform anchor tracking for each individual 3d render (creating the AR effect).
