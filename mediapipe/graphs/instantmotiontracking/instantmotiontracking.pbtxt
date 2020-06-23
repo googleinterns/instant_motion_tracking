@@ -72,8 +72,6 @@ node {
   input_stream: "VIDEO:input_video"
   input_stream: "MODEL_MATRICES:model_matrices"
   output_stream: "output_video"
-  input_side_packet: "TEXTURE:box_texture"
-  input_side_packet: "ANIMATION_ASSET:box_asset_name"
-  input_side_packet: "MASK_TEXTURE:obj_texture"
-  input_side_packet: "MASK_ASSET:obj_asset_name"
+  input_side_packet: "TEXTURE:obj_texture"
+  input_side_packet: "ANIMATION_ASSET:obj_asset_name"
 }

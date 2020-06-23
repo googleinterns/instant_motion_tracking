@@ -16,13 +16,19 @@ package com.google.mediapipe.apps.instantmotiontracking;
 
 import java.util.ArrayList;
 
+// Stickers represent a unique object to render and manipulate in an AR scene.
+// A sticker has a sticker_id (a unique integer identifying a sticker object to
+// render), x and y normalized anchor coordinates [0.0-1.0], user inputs for
+// rotation in radians, scaling, and a renderID (another unique integer which
+// determines what object model to render for this unique sticker).
+
 public class Sticker {
 
-  private int renderID = 0;
-  private float xAnchor, yAnchor;
-  private float userRotation, userScaling;
-  private int stickerID;
-  private static int globalIDLimit = 1;
+  private int renderID = 0; // ID of object to render
+  private float xAnchor, yAnchor; // Normalized X and Y coordinates of anchor
+  private float userRotation, userScaling; // User alterations to scaling and rotation
+  private int stickerID; // Unique sticker integer ID
+  private static int globalIDLimit = 1; // Used to determine next stickerID
 
   public Sticker() {
     this.renderID = 0;

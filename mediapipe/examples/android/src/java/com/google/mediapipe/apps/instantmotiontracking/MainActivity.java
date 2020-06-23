@@ -94,11 +94,11 @@ public class MainActivity extends AppCompatActivity {
 
   // Assets for object rendering
   private Bitmap objTexture = null;
-  private Bitmap boxTexture = null;
-  private static final String BOX_TEXTURE = "texture.bmp";
-  private static final String BOX_FILE = "model.obj.uuu";
-  private static final String OBJ_TEXTURE = "classic_colors.png";
-  private static final String OBJ_FILE = "box.obj.uuu";
+  private static final String OBJ_TEXTURE = "texture.bmp";
+  private static final String OBJ_FILE = "model.obj.uuu";
+  // Tags for the side packets of model texture and .obj.uuu
+  private static final String SIDE_PACKET_ASSET_TAG = "obj_asset_name";
+  private static final String SIDE_PACKET_TEXTURE_TAG = "obj_texture";
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -134,10 +134,8 @@ public class MainActivity extends AppCompatActivity {
     prepareDemoAssets();
     AndroidPacketCreator packetCreator = processor.getPacketCreator();
     Map<String, Packet> inputSidePackets = new HashMap<>();
-    inputSidePackets.put("obj_asset_name", packetCreator.createString(OBJ_FILE));
-    inputSidePackets.put("box_asset_name", packetCreator.createString(BOX_FILE));
-    inputSidePackets.put("obj_texture", packetCreator.createRgbaImageFrame(objTexture));
-    inputSidePackets.put("box_texture", packetCreator.createRgbaImageFrame(boxTexture));
+    inputSidePackets.put(SIDE_PACKET_ASSET_TAG, packetCreator.createString(OBJ_FILE));
+    inputSidePackets.put(SIDE_PACKET_TEXTURE_TAG, packetCreator.createRgbaImageFrame(objTexture));
     processor.setInputSidePackets(inputSidePackets);
 
     // Add frame listener to PacketManagement system
@@ -430,15 +428,6 @@ public class MainActivity extends AppCompatActivity {
     } catch (Exception e) {
       Log.e(TAG, "Error parsing object texture; error: " + e);
       throw new IllegalStateException(e);
-    }
-
-    try {
-      InputStream inputStream = getAssets().open(BOX_TEXTURE);
-      boxTexture = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
-      inputStream.close();
-    } catch (Exception e) {
-      Log.e(TAG, "Error parsing box texture; error: " + e);
-      throw new RuntimeException(e);
     }
   }
 
