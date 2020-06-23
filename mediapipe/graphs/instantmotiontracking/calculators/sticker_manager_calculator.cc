@@ -52,33 +52,38 @@ constexpr char kRenderDescriptorsTag[] = "RENDER_DATA";
 class StickerManagerCalculator : public CalculatorBase {
  public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
-    RET_CHECK(!cc -> Inputs().GetTags().empty());
-    RET_CHECK(!cc -> Outputs().GetTags().empty());
+    RET_CHECK(!cc->Inputs().GetTags().empty());
+    RET_CHECK(!cc->Outputs().GetTags().empty());
 
-    if (cc -> Inputs().HasTag(kStringTag))
-      cc -> Inputs().Tag(kStringTag).Set<std::string>();
-    if (cc -> Outputs().HasTag(kAnchorsTag))
-      cc -> Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-    if (cc -> Outputs().HasTag(kUserRotationsTag))
-      cc -> Outputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
-    if (cc -> Outputs().HasTag(kUserScalingsTag))
-      cc -> Outputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
-    if (cc -> Outputs().HasTag(kRenderDescriptorsTag))
-      cc -> Outputs()
+    if (cc->Inputs().HasTag(kStringTag)) {
+      cc->Inputs().Tag(kStringTag).Set<std::string>();
+    }
+    if (cc->Outputs().HasTag(kAnchorsTag)) {
+      cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
+    }
+    if (cc->Outputs().HasTag(kUserRotationsTag)) {
+      cc->Outputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
+    }
+    if (cc->Outputs().HasTag(kUserScalingsTag)) {
+      cc->Outputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
+    }
+    if (cc->Outputs().HasTag(kRenderDescriptorsTag)) {
+      cc->Outputs()
           .Tag(kRenderDescriptorsTag)
           .Set<std::vector<RenderDescriptor>>();
+    }
 
     return ::mediapipe::OkStatus();
   }
 
   ::mediapipe::Status Open(CalculatorContext* cc) final {
-    cc -> SetOffset(TimestampDiff(0));
+    cc->SetOffset(TimestampDiff(0));
     return ::mediapipe::OkStatus();
   }
 
   ::mediapipe::Status Process(CalculatorContext* cc) final {
     std::string sticker_data_string =
-        cc -> Inputs().Tag(kStringTag).Get<std::string>();
+        cc->Inputs().Tag(kStringTag).Get<std::string>();
 
     std::vector<Anchor> initial_anchor_data;
     std::vector<UserRotation> user_rotation_data;
@@ -135,27 +140,31 @@ class StickerManagerCalculator : public CalculatorBase {
       render_descriptor_data.emplace_back(render_descriptor);
     }
 
-    if (cc -> Outputs().HasTag(kAnchorsTag))
-      cc -> Outputs()
+    if (cc->Outputs().HasTag(kAnchorsTag)) {
+      cc->Outputs()
           .Tag(kAnchorsTag)
           .AddPacket(MakePacket<std::vector<Anchor>>(initial_anchor_data)
-                         .At(cc -> InputTimestamp()));
-    if (cc -> Outputs().HasTag(kUserRotationsTag))
-      cc -> Outputs()
+                         .At(cc->InputTimestamp()));
+    }
+    if (cc->Outputs().HasTag(kUserRotationsTag)) {
+      cc->Outputs()
           .Tag(kUserRotationsTag)
           .AddPacket(MakePacket<std::vector<UserRotation>>(user_rotation_data)
-                         .At(cc -> InputTimestamp()));
-    if (cc -> Outputs().HasTag(kUserScalingsTag))
-      cc -> Outputs()
+                         .At(cc->InputTimestamp()));
+    }
+    if (cc->Outputs().HasTag(kUserScalingsTag)) {
+      cc->Outputs()
           .Tag(kUserScalingsTag)
           .AddPacket(MakePacket<std::vector<UserScaling>>(user_scaling_data)
-                         .At(cc -> InputTimestamp()));
-    if (cc -> Outputs().HasTag(kRenderDescriptorsTag))
-      cc -> Outputs()
+                         .At(cc->InputTimestamp()));
+    }
+    if (cc->Outputs().HasTag(kRenderDescriptorsTag)) {
+      cc->Outputs()
           .Tag(kRenderDescriptorsTag)
           .AddPacket(
               MakePacket<std::vector<RenderDescriptor>>(render_descriptor_data)
-                  .At(cc -> InputTimestamp()));
+                  .At(cc->InputTimestamp()));
+    }
 
     return ::mediapipe::OkStatus();
   }

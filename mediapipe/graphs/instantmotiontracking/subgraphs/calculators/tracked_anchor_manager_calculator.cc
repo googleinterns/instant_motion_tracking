@@ -59,25 +59,30 @@ private:
 
 public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
-    RET_CHECK(!cc -> Inputs().GetTags().empty());
-    RET_CHECK(!cc -> Outputs().GetTags().empty());
+    RET_CHECK(!cc->Inputs().GetTags().empty());
+    RET_CHECK(!cc->Outputs().GetTags().empty());
 
-    if(cc -> Inputs().HasTag(kAnchorsTag))
-      cc -> Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-    if(cc -> Inputs().HasTag(kBoxesInputTag))
-      cc -> Inputs().Tag(kBoxesInputTag).Set<TimedBoxProtoList>();
-    if(cc -> Outputs().HasTag(kBoxesOutputTag))
-      cc -> Outputs().Tag(kBoxesOutputTag).Set<TimedBoxProtoList>();
-    if(cc -> Outputs().HasTag(kAnchorsTag))
-      cc -> Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-    if(cc -> Outputs().HasTag(kCancelTag))
-      cc -> Outputs().Tag(kCancelTag).Set<int>();
+    if(cc->Inputs().HasTag(kAnchorsTag)) {
+      cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
+    }
+    if(cc->Inputs().HasTag(kBoxesInputTag)) {
+      cc->Inputs().Tag(kBoxesInputTag).Set<TimedBoxProtoList>();
+    }
+    if(cc->Outputs().HasTag(kBoxesOutputTag)) {
+      cc->Outputs().Tag(kBoxesOutputTag).Set<TimedBoxProtoList>();
+    }
+    if(cc->Outputs().HasTag(kAnchorsTag)) {
+      cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
+    }
+    if(cc->Outputs().HasTag(kCancelTag)) {
+      cc->Outputs().Tag(kCancelTag).Set<int>();
+    }
 
     return ::mediapipe::OkStatus();
   }
 
   ::mediapipe::Status Open(CalculatorContext* cc) override {
-    cc -> SetOffset(TimestampDiff(0));
+    cc->SetOffset(TimestampDiff(0));
     return ::mediapipe::OkStatus();
   }
 
@@ -86,7 +91,7 @@ public:
 REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
 
 ::mediapipe::Status TrackedAnchorManagerCalculator::Process(CalculatorContext* cc) {
-  std::vector<Anchor> current_anchor_data = cc -> Inputs().Tag(kAnchorsTag).Get<std::vector<Anchor>>();
+  std::vector<Anchor> current_anchor_data = cc->Inputs().Tag(kAnchorsTag).Get<std::vector<Anchor>>();
 
   auto pos_boxes = absl::make_unique<TimedBoxProtoList>();
 
@@ -98,18 +103,18 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
       if(previous_anchor.sticker_id == current_anchor.sticker_id) {
         // Check if anchor was repositioned by user, and reset tracking box
         if(previous_anchor.x != current_anchor.x || previous_anchor.y != current_anchor.y) {
-          TimedBoxProto* box = pos_boxes -> add_box();
-          box -> set_left(current_anchor.x - box_h_w_/2);
-          box -> set_right(current_anchor.x + box_h_w_/2);
-          box -> set_top(current_anchor.y - box_h_w_/2);
-          box -> set_bottom(current_anchor.y + box_h_w_/2);
-          box -> set_id(current_anchor.sticker_id);
-          box -> set_time_msec(cc -> InputTimestamp().Microseconds() / 1000);
+          TimedBoxProto* box = pos_boxes->add_box();
+          box->set_left(current_anchor.x - box_h_w_/2);
+          box->set_right(current_anchor.x + box_h_w_/2);
+          box->set_top(current_anchor.y - box_h_w_/2);
+          box->set_bottom(current_anchor.y + box_h_w_/2);
+          box->set_id(current_anchor.sticker_id);
+          box->set_time_msec(cc->InputTimestamp().Microseconds() / 1000);
           current_anchor.z = 1.0; // Default value for normalized z (scale factor)
         }
         // If anchor was not repositioned, update the location from the tracking system
-        else if (cc -> Inputs().HasTag(kBoxesInputTag) && !cc -> Inputs().Tag(kBoxesInputTag).IsEmpty()) {
-          for(const TimedBoxProto& box : cc -> Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>().box())
+        else if (cc->Inputs().HasTag(kBoxesInputTag) && !cc->Inputs().Tag(kBoxesInputTag).IsEmpty()) {
+          for(const auto& box : cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>().box())
           {
             if(box.id() == current_anchor.sticker_id) {
               current_anchor.x = (box.left() + box.right())/2;
@@ -124,25 +129,25 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
     }
   }
 
-  mediapipe::Timestamp timestamp = cc -> InputTimestamp();
+  mediapipe::Timestamp timestamp = cc->InputTimestamp();
   // Delete all boxes that are artifacts from deleted anchors
-  for(const TimedBoxProto& box:cc -> Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>().box()) {
+  for(const TimedBoxProto& box : cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>().box()) {
     bool anchor_is_being_tracked = false;
-    for(Anchor point:tracked_scaled_anchor_data) {
+    for(Anchor point : tracked_scaled_anchor_data) {
       if(box.id() == point.sticker_id) {
         anchor_is_being_tracked = true;
         break;
       }
     }
     if(!anchor_is_being_tracked) {
-      cc -> Outputs().Tag("CANCEL_ID").AddPacket(MakePacket<int>(box.id()).At(timestamp++));
+      cc->Outputs().Tag(kCancelTag).AddPacket(MakePacket<int>(box.id()).At(timestamp++));
     }
   }
 
   previous_anchor_data_ = current_anchor_data; // Set previous anchors for next iteration
 
-  cc -> Outputs().Tag(kAnchorsTag).AddPacket(MakePacket<std::vector<Anchor>>(tracked_scaled_anchor_data).At(cc -> InputTimestamp()));
-  cc -> Outputs().Tag(kBoxesOutputTag).Add(pos_boxes.release(),cc -> InputTimestamp());
+  cc->Outputs().Tag(kAnchorsTag).AddPacket(MakePacket<std::vector<Anchor>>(tracked_scaled_anchor_data).At(cc->InputTimestamp()));
+  cc->Outputs().Tag(kBoxesOutputTag).Add(pos_boxes.release(),cc->InputTimestamp());
 
   return ::mediapipe::OkStatus();
 }

@@ -46,21 +46,24 @@ constexpr char kFinalRotationsTag[] = "ROTATION_DATA";
 class RotationManagerCalculator : public CalculatorBase {
  public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
-    RET_CHECK(!cc -> Inputs().GetTags().empty());
-    RET_CHECK(!cc -> Outputs().GetTags().empty());
+    RET_CHECK(!cc->Inputs().GetTags().empty());
+    RET_CHECK(!cc->Outputs().GetTags().empty());
 
-    if (cc -> Inputs().HasTag(kIMUDataTag))
-      cc -> Inputs().Tag(kIMUDataTag).Set<float[]>();
-    if (cc -> Inputs().HasTag(kUserRotationsTag))
-      cc -> Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
-    if (cc -> Outputs().HasTag(kFinalRotationsTag))
-      cc -> Outputs().Tag(kFinalRotationsTag).Set<std::vector<Rotation>>();
+    if (cc->Inputs().HasTag(kIMUDataTag)) {
+      cc->Inputs().Tag(kIMUDataTag).Set<float[]>();
+    }
+    if (cc->Inputs().HasTag(kUserRotationsTag)) {
+      cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
+    }
+    if (cc->Outputs().HasTag(kFinalRotationsTag)) {
+      cc->Outputs().Tag(kFinalRotationsTag).Set<std::vector<Rotation>>();
+    }
 
     return ::mediapipe::OkStatus();
   }
 
   ::mediapipe::Status Open(CalculatorContext* cc) final {
-    cc -> SetOffset(TimestampDiff(0));
+    cc->SetOffset(TimestampDiff(0));
     return ::mediapipe::OkStatus();
   }
 
@@ -68,12 +71,12 @@ class RotationManagerCalculator : public CalculatorBase {
     std::vector<Rotation> combined_rotation_data;
 
     const std::vector<UserRotation> user_rotation_data =
-        cc -> Inputs().Tag(kUserRotationsTag).Get<std::vector<UserRotation>>();
+        cc->Inputs().Tag(kUserRotationsTag).Get<std::vector<UserRotation>>();
 
     // Device IMU Data definitions
-    const float roll = cc -> Inputs().Tag(kIMUDataTag).Get<float[]>()[0];
-    const float pitch = cc -> Inputs().Tag(kIMUDataTag).Get<float[]>()[1];
-    const float yaw = cc -> Inputs().Tag(kIMUDataTag).Get<float[]>()[2];
+    const float roll = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[0];
+    const float pitch = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[1];
+    const float yaw = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[2];
 
     for (UserRotation user_rotation : user_rotation_data) {
       Rotation combined_rotation;
@@ -85,12 +88,13 @@ class RotationManagerCalculator : public CalculatorBase {
       combined_rotation_data.emplace_back(combined_rotation);
     }
 
-    if (cc -> Outputs().HasTag(kFinalRotationsTag))
-      cc -> Outputs()
+    if (cc->Outputs().HasTag(kFinalRotationsTag)) {
+      cc->Outputs()
           .Tag(kFinalRotationsTag)
           .AddPacket(MakePacket<std::vector<Rotation>>(combined_rotation_data)
-                         .At(cc -> InputTimestamp()));
-
+                         .At(cc->InputTimestamp()));
+    }
+    
     return ::mediapipe::OkStatus();
   }
 

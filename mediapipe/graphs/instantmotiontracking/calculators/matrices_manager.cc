@@ -67,35 +67,38 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
 
 ::mediapipe::Status MatricesManagerCalculator::GetContract(
     CalculatorContract* cc) {
-  RET_CHECK(!cc -> Inputs().GetTags().empty());
-  RET_CHECK(!cc -> Outputs().GetTags().empty());
+  RET_CHECK(!cc->Inputs().GetTags().empty());
+  RET_CHECK(!cc->Outputs().GetTags().empty());
 
-  if (cc -> Inputs().HasTag(kFinalTranslationsTag))
-    cc -> Inputs().Tag(kFinalTranslationsTag).Set<std::vector<Translation>>();
-  if (cc -> Inputs().HasTag(kFinalRotationsTag))
-    cc -> Inputs().Tag(kFinalRotationsTag).Set<std::vector<Rotation>>();
-  if (cc -> Outputs().HasTag(kModelMatricesTag))
-    cc -> Outputs().Tag(kModelMatricesTag).Set<TimedModelMatrixProtoList>();
-
+  if (cc->Inputs().HasTag(kFinalTranslationsTag)) {
+    cc->Inputs().Tag(kFinalTranslationsTag).Set<std::vector<Translation>>();
+  }
+  if (cc->Inputs().HasTag(kFinalRotationsTag)) {
+    cc->Inputs().Tag(kFinalRotationsTag).Set<std::vector<Rotation>>();
+  }
+  if (cc->Outputs().HasTag(kModelMatricesTag)) {
+    cc->Outputs().Tag(kModelMatricesTag).Set<TimedModelMatrixProtoList>();
+  }
+  
   return ::mediapipe::OkStatus();
 }
 
 ::mediapipe::Status MatricesManagerCalculator::Open(CalculatorContext* cc) {
-  cc -> SetOffset(TimestampDiff(0));
+  cc->SetOffset(TimestampDiff(0));
   return ::mediapipe::OkStatus();
 }
 
 ::mediapipe::Status MatricesManagerCalculator::Process(CalculatorContext* cc) {
   auto model_matrices = std::make_unique<TimedModelMatrixProtoList>();
   TimedModelMatrixProtoList* model_matrix_list = model_matrices.get();
-  model_matrix_list -> clear_model_matrix();
+  model_matrix_list->clear_model_matrix();
 
   const std::vector<Rotation> rotation_data =
-      cc -> Inputs()
+      cc->Inputs()
           .Tag(kFinalRotationsTag)
           .Get<std::vector<Rotation>>();
   const std::vector<Translation> translation_data =
-      cc -> Inputs()
+      cc->Inputs()
           .Tag(kFinalTranslationsTag)
           .Get<std::vector<Translation>>();
 
@@ -103,8 +106,8 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     for (Translation translation : translation_data) {
       if (rotation.sticker_id == translation.sticker_id) {
         TimedModelMatrixProto* model_matrix =
-            model_matrix_list -> add_model_matrix();
-        model_matrix -> set_id(rotation.sticker_id);
+            model_matrix_list->add_model_matrix();
+        model_matrix->set_id(rotation.sticker_id);
 
         Matrix4fRM mvp_matrix = generateEigenModelMatrix(rotation, translation);
 
@@ -112,7 +115,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
         // (col-wise)
         for (int i = 0; i < mvp_matrix.rows(); ++i) {
           for (int j = 0; j < mvp_matrix.cols(); ++j) {
-            model_matrix -> add_matrix_entries(mvp_matrix(j, i));
+            model_matrix->add_matrix_entries(mvp_matrix(j, i));
           }
         }
         break;
@@ -120,9 +123,9 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     }
   }
 
-  cc -> Outputs()
+  cc->Outputs()
       .Tag(kModelMatricesTag)
-      .Add(model_matrices.release(), cc -> InputTimestamp());
+      .Add(model_matrices.release(), cc->InputTimestamp());
 
   return ::mediapipe::OkStatus();
 }

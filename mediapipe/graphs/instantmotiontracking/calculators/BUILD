@@ -21,9 +21,16 @@ package(default_visibility = ["//visibility:public"])
 exports_files(["LICENSE"])
 
 cc_library(
+    name = "transformations",
+    srcs = ["transformations.h"],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "sticker_manager_calculator",
     srcs = ["sticker_manager_calculator.cc"],
     deps = [
+        ":transformations",
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework/port:integral_types",
         "//mediapipe/framework/port:logging",
@@ -31,14 +38,7 @@ cc_library(
         "//mediapipe/framework/port:source_location",
         "//mediapipe/framework/port:status",
         "//mediapipe/framework:timestamp",
-        ":transformations",
     ],
-    alwayslink = 1,
-)
-
-cc_library(
-    name = "transformations",
-    srcs = ["transformations.h"],
     alwayslink = 1,
 )
 
@@ -46,6 +46,7 @@ cc_library(
     name = "rotation_manager_calculator",
     srcs = ["rotation_manager_calculator.cc"],
     deps = [
+        ":transformations",
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework/port:integral_types",
         "//mediapipe/framework/port:logging",
@@ -53,7 +54,6 @@ cc_library(
         "//mediapipe/framework/port:source_location",
         "//mediapipe/framework/port:status",
         "//mediapipe/framework:timestamp",
-        ":transformations",
     ],
     alwayslink = 1,
 )
@@ -62,6 +62,7 @@ cc_library(
     name = "translation_manager_calculator",
     srcs = ["translation_manager_calculator.cc"],
     deps = [
+        ":transformations",
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework/port:integral_types",
         "//mediapipe/framework/port:logging",
@@ -69,7 +70,6 @@ cc_library(
         "//mediapipe/framework/port:source_location",
         "//mediapipe/framework/port:status",
         "//mediapipe/framework:timestamp",
-        ":transformations",
     ],
     alwayslink = 1,
 )
@@ -78,6 +78,7 @@ cc_library(
     name = "matrices_manager",
     srcs = ["matrices_manager.cc"],
     deps = [
+        ":transformations",
         "//mediapipe/framework:calculator_framework",
       	"//mediapipe/framework/port:integral_types",
       	"//mediapipe/framework/port:logging",
@@ -92,7 +93,6 @@ cc_library(
       	"//mediapipe/framework/formats:image_frame",
       	"//mediapipe/framework/formats:image_frame_opencv",
       	"@eigen_archive//:eigen",
-        ":transformations",
     ],
     alwayslink = 1,
 )

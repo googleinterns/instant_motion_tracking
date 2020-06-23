@@ -46,11 +46,11 @@ constexpr char kFinalTranslationsTag[] = "TRANSLATION_DATA";
 
 class TranslationManagerCalculator : public CalculatorBase {
  private:
-  // (68 degrees, 4:3 for typical phone camera/display)
-  float vertical_fov_radians_ = (68) * M_PI / 180.0;
-  float aspect_ratio_ = (4.0 / 3.0);
+  // (68 degrees, 4:3 for Pixel 4)
+  const float vertical_fov_radians_ = (68.0f) * M_PI / 180.0f;
+  const float aspect_ratio_ = (4.0f / 3.0f);
   // initial Z value (-98 is just in visual range for OpenGL render)
-  float initial_z_ = -98;
+  const float initial_z_ = -98;
 
   float getUserScaling(std::vector<UserScaling> scalings, int sticker_id) {
     for (UserScaling user_scaling : scalings) {
@@ -62,34 +62,35 @@ class TranslationManagerCalculator : public CalculatorBase {
 
  public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
-    RET_CHECK(!cc -> Inputs().GetTags().empty());
-    RET_CHECK(!cc -> Outputs().GetTags().empty());
+    RET_CHECK(!cc->Inputs().GetTags().empty());
+    RET_CHECK(!cc->Outputs().GetTags().empty());
 
-    if (cc -> Inputs().HasTag(kAnchorsTag))
-      cc -> Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-
-    if (cc -> Inputs().HasTag(kUserScalingsTag))
-      cc -> Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
-
-    if (cc -> Outputs().HasTag(kFinalTranslationsTag))
-      cc -> Outputs()
+    if (cc->Inputs().HasTag(kAnchorsTag)) {
+      cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
+    }
+    if (cc->Inputs().HasTag(kUserScalingsTag)) {
+      cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
+    }
+    if (cc->Outputs().HasTag(kFinalTranslationsTag)) {
+      cc->Outputs()
           .Tag(kFinalTranslationsTag)
           .Set<std::vector<Translation>>();
+    }
 
     return ::mediapipe::OkStatus();
   }
 
   ::mediapipe::Status Open(CalculatorContext* cc) final {
-    cc -> SetOffset(TimestampDiff(0));
+    cc->SetOffset(TimestampDiff(0));
     return ::mediapipe::OkStatus();
   }
 
   ::mediapipe::Status Process(CalculatorContext* cc) final {
     std::vector<Translation> combined_translation_data;
     const std::vector<UserScaling> user_scalings =
-        cc -> Inputs().Tag(kUserScalingsTag).Get<std::vector<UserScaling>>();
+        cc->Inputs().Tag(kUserScalingsTag).Get<std::vector<UserScaling>>();
     const std::vector<Anchor> anchors =
-        cc -> Inputs().Tag(kAnchorsTag).Get<std::vector<Anchor>>();
+        cc->Inputs().Tag(kAnchorsTag).Get<std::vector<Anchor>>();
 
     for (Anchor tracked_anchor : anchors) {
       Translation combined_translation;
@@ -117,12 +118,12 @@ class TranslationManagerCalculator : public CalculatorBase {
       combined_translation_data.emplace_back(combined_translation);
     }
 
-    if (cc -> Outputs().HasTag(kFinalTranslationsTag))
-      cc -> Outputs()
+    if (cc->Outputs().HasTag(kFinalTranslationsTag))
+      cc->Outputs()
           .Tag(kFinalTranslationsTag)
           .AddPacket(MakePacket<std::vector<Translation>>(
                          combined_translation_data)
-                         .At(cc -> InputTimestamp()));
+                         .At(cc->InputTimestamp()));
 
     return ::mediapipe::OkStatus();
   }
