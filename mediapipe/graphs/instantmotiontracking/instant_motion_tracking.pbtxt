@@ -48,21 +48,13 @@ node {
   output_stream: "TRANSLATION_DATA:final_translation_data"
 }
 
-# Finalizes all rotation data and integrates IMU information into individual
-# sticker rotation data.
-node {
-  calculator: "RotationManagerCalculator"
-  input_stream: "IMU_DATA:imu_data"
-  input_stream: "USER_ROTATIONS:user_rotation_data"
-  output_stream: "ROTATION_DATA:final_rotation_data"
-}
-
 # Concatenates all transformations to generate model matrices for the OpenGL
 # animation overlay calculator.
 node {
   calculator: "MatricesManagerCalculator"
+  input_stream: "IMU_DATA:imu_data"
+  input_stream: "USER_ROTATIONS:user_rotation_data"
   input_stream: "TRANSLATION_DATA:final_translation_data"
-  input_stream: "ROTATION_DATA:final_rotation_data"
   output_stream: "MODEL_MATRICES:model_matrices"
 }
 

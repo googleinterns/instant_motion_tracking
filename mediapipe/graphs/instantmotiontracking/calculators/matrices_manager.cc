@@ -32,15 +32,17 @@ namespace mediapipe {
 using Matrix4fRM = Eigen::Matrix<float, 4, 4, Eigen::RowMajor>;
 
 constexpr char kFinalTranslationsTag[] = "TRANSLATION_DATA";
-constexpr char kFinalRotationsTag[] = "ROTATION_DATA";
+constexpr char kIMUDataTag[] = "IMU_DATA";
+constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
 constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
+
 
 // Intermediary for rotation and translation data to model matrix usable by
 // gl_animation_overlay_calculator
 //
 // Input:
-//  ROTATION_DATA - All stickers final rotation data (vector of Rotation
-//  objects)
+//  IMU_DATA - float[3] of [roll, pitch, yaw] of device
+//  USER_ROTATIONS - UserRotations with corresponding radians of rotation
 //  TRANSLATION_DATA - All stickers final translation data (vector of
 //  Translation objects)
 // Output:
@@ -49,8 +51,9 @@ constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
 // Example config:
 // node{
 //  calculator: "MatricesManagerCalculator"
+//  input_stream: "IMU_DATA:imu_data"
+//  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "TRANSLATION_DATA:final_translation_data"
-//  input_stream: "ROTATION_DATA:final_rotation_data"
 //  output_stream: "MODEL_MATRICES:model_matrices"
 // }
 
@@ -59,8 +62,10 @@ class MatricesManagerCalculator : public CalculatorBase {
   static ::mediapipe::Status GetContract(CalculatorContract* cc);
   ::mediapipe::Status Open(CalculatorContext* cc) override;
   ::mediapipe::Status Process(CalculatorContext* cc) override;
-  Matrix4fRM generateEigenModelMatrix(Rotation rotation,
-                                      Translation translation);
+  Matrix4fRM generateEigenModelMatrix(Eigen::Vector3f translation_vector,
+    Eigen::Matrix3f rotation_submatrix);
+  Eigen::Vector3f generateTranslationVector(Translation translation);
+  Eigen::Matrix3f generateRotationSubmatrix(float roll, float pitch, float yaw, float user_rotation);
 };
 
 REGISTER_CALCULATOR(MatricesManagerCalculator);
@@ -73,13 +78,16 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   if (cc->Inputs().HasTag(kFinalTranslationsTag)) {
     cc->Inputs().Tag(kFinalTranslationsTag).Set<std::vector<Translation>>();
   }
-  if (cc->Inputs().HasTag(kFinalRotationsTag)) {
-    cc->Inputs().Tag(kFinalRotationsTag).Set<std::vector<Rotation>>();
+  if (cc->Inputs().HasTag(kIMUDataTag)) {
+    cc->Inputs().Tag(kIMUDataTag).Set<float[]>();
+  }
+  if (cc->Inputs().HasTag(kUserRotationsTag)) {
+    cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
   }
   if (cc->Outputs().HasTag(kModelMatricesTag)) {
     cc->Outputs().Tag(kModelMatricesTag).Set<TimedModelMatrixProtoList>();
   }
-  
+
   return ::mediapipe::OkStatus();
 }
 
@@ -93,23 +101,30 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   TimedModelMatrixProtoList* model_matrix_list = model_matrices.get();
   model_matrix_list->clear_model_matrix();
 
-  const std::vector<Rotation> rotation_data =
-      cc->Inputs()
-          .Tag(kFinalRotationsTag)
-          .Get<std::vector<Rotation>>();
+  const std::vector<UserRotation> user_rotation_data =
+      cc->Inputs().Tag(kUserRotationsTag).Get<std::vector<UserRotation>>();
+
   const std::vector<Translation> translation_data =
       cc->Inputs()
           .Tag(kFinalTranslationsTag)
           .Get<std::vector<Translation>>();
 
-  for (Rotation rotation : rotation_data) {
+  // Device IMU Data definitions
+  const float roll = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[0];
+  const float pitch = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[1];
+  const float yaw = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[2];
+
+  for (UserRotation user_rotation : user_rotation_data) {
     for (Translation translation : translation_data) {
-      if (rotation.sticker_id == translation.sticker_id) {
+      if (user_rotation.sticker_id == translation.sticker_id) {
         TimedModelMatrixProto* model_matrix =
             model_matrix_list->add_model_matrix();
-        model_matrix->set_id(rotation.sticker_id);
+        model_matrix->set_id(user_rotation.sticker_id);
 
-        Matrix4fRM mvp_matrix = generateEigenModelMatrix(rotation, translation);
+        Eigen::Vector3f translation_vector = generateTranslationVector(translation);
+        Eigen::Matrix3f rotation_submatrix = generateRotationSubmatrix(roll, pitch, yaw, user_rotation.radians);
+
+        Matrix4fRM mvp_matrix = generateEigenModelMatrix(translation_vector, rotation_submatrix);
 
         // The generated model matrix must be mapped to TimedModelMatrixProto
         // (col-wise)
@@ -130,25 +145,35 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   return ::mediapipe::OkStatus();
 }
 
+// Using the tracked translation data, generate a vector for MVP translation
+Eigen::Vector3f MatricesManagerCalculator::generateTranslationVector(Translation translation) {
+  Eigen::Vector3f t_vector(translation.x, translation.y, translation.z);
+  return t_vector;
+}
+
+// Generate the submatrix defining rotation using IMU data and user rotations
+Eigen::Matrix3f MatricesManagerCalculator::generateRotationSubmatrix(float roll, float pitch, float yaw, float user_rotation_radians) {
+  Eigen::Matrix3f r_submatrix;
+  r_submatrix =
+      Eigen::AngleAxisf(yaw - user_rotation_radians, Eigen::Vector3f::UnitY()) *
+      Eigen::AngleAxisf(pitch, Eigen::Vector3f::UnitZ()) *
+      Eigen::AngleAxisf(roll - (M_PI / 2), Eigen::Vector3f::UnitX());
+  return r_submatrix;
+}
+
 // Generates a model matrix via Eigen with appropriate transformations
 Matrix4fRM MatricesManagerCalculator::generateEigenModelMatrix(
-    Rotation rotation, Translation translation) {
+    Eigen::Vector3f translation_vector, Eigen::Matrix3f rotation_submatrix) {
+  // Define basic empty model matrix
   Matrix4fRM mvp_matrix;
-
   mvp_matrix << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
       0.0, 0.0, 1.0;  // trailing 1.0 required by OpenGL
 
-  // Generate and set the translation vector
-  Eigen::Vector3f t_vector(translation.x, translation.y, translation.z);
-  mvp_matrix.bottomLeftCorner<1, 3>() = t_vector;
+  // Set the translation vector
+  mvp_matrix.bottomLeftCorner<1, 3>() = translation_vector;
 
-  // Generate and set the rotation submatrix
-  Eigen::Matrix3f r_submatrix;
-  r_submatrix =
-      Eigen::AngleAxisf(rotation.y_radians, Eigen::Vector3f::UnitY()) *
-      Eigen::AngleAxisf(rotation.z_radians, Eigen::Vector3f::UnitZ()) *
-      Eigen::AngleAxisf(rotation.x_radians, Eigen::Vector3f::UnitX());
-  mvp_matrix.topLeftCorner<3, 3>() = r_submatrix;
+  // Set the rotation submatrix
+  mvp_matrix.topLeftCorner<3, 3>() = rotation_submatrix;
 
   return mvp_matrix;
 }

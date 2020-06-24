@@ -22,7 +22,6 @@ cc_library(
         "//mediapipe/graphs/instantmotiontracking/calculators:sticker_manager_calculator",
         "//mediapipe/graphs/instantmotiontracking/subgraphs:region_tracking",
         "//mediapipe/graphs/instantmotiontracking/calculators:translation_manager_calculator",
-        "//mediapipe/graphs/instantmotiontracking/calculators:rotation_manager_calculator",
         "//mediapipe/graphs/instantmotiontracking/calculators:matrices_manager",
         "//mediapipe/graphs/object_detection_3d/calculators:gl_animation_overlay_calculator",
     ],
