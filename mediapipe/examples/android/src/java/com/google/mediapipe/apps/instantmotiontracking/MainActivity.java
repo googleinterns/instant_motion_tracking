@@ -94,8 +94,8 @@ public class MainActivity extends AppCompatActivity {
 
   // Assets for object rendering
   private Bitmap objTexture = null;
-  private static final String OBJ_TEXTURE = "texture.bmp";
-  private static final String OBJ_FILE = "model.obj.uuu";
+  private static final String OBJ_TEXTURE = "chair_texture.bmp";
+  private static final String OBJ_FILE = "chair.obj.uuu";
   // Tags for the side packets of model texture and .obj.uuu
   private static final String SIDE_PACKET_ASSET_TAG = "obj_asset_name";
   private static final String SIDE_PACKET_TEXTURE_TAG = "obj_texture";

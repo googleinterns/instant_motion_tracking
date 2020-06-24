@@ -35,6 +35,6 @@ load(
 
 mediapipe_binary_graph(
     name = "mobile_binary_graph",
-    graph = "instantmotiontracking.pbtxt",
+    graph = "instant_motion_tracking.pbtxt",
     output_name = "mobile.binarypb",
 )
