@@ -39,22 +39,14 @@ node {
   output_stream: "ANCHORS:tracked_scaled_anchor_data"
 }
 
-# Finalizes all translation data and converts coordinates from normalized device
-# system to OpenGL coordinates.
-node {
-  calculator: "TranslationManagerCalculator"
-  input_stream: "ANCHORS:tracked_scaled_anchor_data"
-  input_stream: "USER_SCALINGS:user_scaling_data"
-  output_stream: "TRANSLATION_DATA:final_translation_data"
-}
-
 # Concatenates all transformations to generate model matrices for the OpenGL
 # animation overlay calculator.
 node {
   calculator: "MatricesManagerCalculator"
   input_stream: "IMU_DATA:imu_data"
   input_stream: "USER_ROTATIONS:user_rotation_data"
-  input_stream: "TRANSLATION_DATA:final_translation_data"
+  input_stream: "USER_SCALINGS:user_scaling_data"
+  input_stream: "TRANSLATION_DATA:tracked_scaled_anchor_data"
   output_stream: "MODEL_MATRICES:model_matrices"
 }
 

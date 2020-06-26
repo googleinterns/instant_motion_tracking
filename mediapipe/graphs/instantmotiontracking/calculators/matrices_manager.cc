@@ -34,6 +34,7 @@ using Matrix4fRM = Eigen::Matrix<float, 4, 4, Eigen::RowMajor>;
 constexpr char kFinalTranslationsTag[] = "TRANSLATION_DATA";
 constexpr char kIMUDataTag[] = "IMU_DATA";
 constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
+constexpr char kUserScalingsTag[] = "USER_SCALINGS";
 constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
 
 
@@ -58,14 +59,38 @@ constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
 // }
 
 class MatricesManagerCalculator : public CalculatorBase {
+private:
+  // (68 degrees, 4:3 for Pixel 4)
+  const float vertical_fov_radians_ = (68.0f) * M_PI / 180.0f;
+  const float aspect_ratio_ = (4.0f / 3.0f);
+  // initial Z value (-98 is just in visual range for OpenGL render)
+  const float initial_z_ = -98;
+
  public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc);
   ::mediapipe::Status Open(CalculatorContext* cc) override;
   ::mediapipe::Status Process(CalculatorContext* cc) override;
   Matrix4fRM generateEigenModelMatrix(Eigen::Vector3f translation_vector,
     Eigen::Matrix3f rotation_submatrix);
-  Eigen::Vector3f generateTranslationVector(Translation translation);
-  Eigen::Matrix3f generateRotationSubmatrix(float roll, float pitch, float yaw, float user_rotation);
+  Eigen::Vector3f generateTranslationVector(Anchor tracked_anchor, float user_scaling_increment);
+  Eigen::Matrix3f generateRotationSubmatrix(float roll, float pitch, float yaw, float user_rotation_radians);
+
+  float getUserScaling(std::vector<UserScaling> scalings, int sticker_id) {
+    for (UserScaling user_scaling : scalings) {
+      if (user_scaling.sticker_id == sticker_id) {
+        return user_scaling.scaling_increment;
+      }
+    }
+  }
+
+  float getUserRotation(std::vector<UserRotation> rotations, int sticker_id) {
+    for (UserRotation rotation : rotations) {
+      if (rotation.sticker_id == sticker_id) {
+        return rotation.radians;
+      }
+    }
+  }
+
 };
 
 REGISTER_CALCULATOR(MatricesManagerCalculator);
@@ -76,10 +101,13 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   RET_CHECK(!cc->Outputs().GetTags().empty());
 
   if (cc->Inputs().HasTag(kFinalTranslationsTag)) {
-    cc->Inputs().Tag(kFinalTranslationsTag).Set<std::vector<Translation>>();
+    cc->Inputs().Tag(kFinalTranslationsTag).Set<std::vector<Anchor>>();
   }
   if (cc->Inputs().HasTag(kIMUDataTag)) {
     cc->Inputs().Tag(kIMUDataTag).Set<float[]>();
+  }
+  if (cc->Inputs().HasTag(kUserScalingsTag)) {
+      cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
   }
   if (cc->Inputs().HasTag(kUserRotationsTag)) {
     cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
@@ -104,36 +132,38 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   const std::vector<UserRotation> user_rotation_data =
       cc->Inputs().Tag(kUserRotationsTag).Get<std::vector<UserRotation>>();
 
-  const std::vector<Translation> translation_data =
+  const std::vector<UserScaling> user_scaling_data =
+        cc->Inputs().Tag(kUserScalingsTag).Get<std::vector<UserScaling>>();
+
+  const std::vector<Anchor> translation_data =
       cc->Inputs()
           .Tag(kFinalTranslationsTag)
-          .Get<std::vector<Translation>>();
+          .Get<std::vector<Anchor>>();
 
   // Device IMU Data definitions
   const float roll = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[0];
   const float pitch = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[1];
   const float yaw = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[2];
 
-  for (UserRotation user_rotation : user_rotation_data) {
-    for (Translation translation : translation_data) {
-      if (user_rotation.sticker_id == translation.sticker_id) {
-        TimedModelMatrixProto* model_matrix =
-            model_matrix_list->add_model_matrix();
-        model_matrix->set_id(user_rotation.sticker_id);
+  for (Anchor anchor : translation_data) {
+    int id = anchor.sticker_id;
 
-        Eigen::Vector3f translation_vector = generateTranslationVector(translation);
-        Eigen::Matrix3f rotation_submatrix = generateRotationSubmatrix(roll, pitch, yaw, user_rotation.radians);
+    TimedModelMatrixProto* model_matrix =
+        model_matrix_list->add_model_matrix();
+    model_matrix->set_id(id);
 
-        Matrix4fRM mvp_matrix = generateEigenModelMatrix(translation_vector, rotation_submatrix);
+    float rotation = getUserRotation(user_rotation_data, id);
+    float scaling = getUserScaling(user_scaling_data, id);
 
-        // The generated model matrix must be mapped to TimedModelMatrixProto
-        // (col-wise)
-        for (int i = 0; i < mvp_matrix.rows(); ++i) {
-          for (int j = 0; j < mvp_matrix.cols(); ++j) {
-            model_matrix->add_matrix_entries(mvp_matrix(j, i));
-          }
-        }
-        break;
+    Eigen::Vector3f translation_vector = generateTranslationVector(anchor, scaling);
+    Eigen::Matrix3f rotation_submatrix = generateRotationSubmatrix(roll, pitch, yaw, rotation);
+
+    Matrix4fRM mvp_matrix = generateEigenModelMatrix(translation_vector, rotation_submatrix);
+
+    // The generated model matrix must be mapped to TimedModelMatrixProto (col-wise)
+    for (int i = 0; i < mvp_matrix.rows(); ++i) {
+      for (int j = 0; j < mvp_matrix.cols(); ++j) {
+        model_matrix->add_matrix_entries(mvp_matrix(j, i));
       }
     }
   }
@@ -146,8 +176,19 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
 }
 
 // Using the tracked translation data, generate a vector for MVP translation
-Eigen::Vector3f MatricesManagerCalculator::generateTranslationVector(Translation translation) {
-  Eigen::Vector3f t_vector(translation.x, translation.y, translation.z);
+Eigen::Vector3f MatricesManagerCalculator::generateTranslationVector(Anchor tracked_anchor, float user_scaling_increment) {
+  // Convert from normalized [0.0-1.0] to openGL on-screen coordinates
+  float z = (initial_z_ + user_scaling_increment) * tracked_anchor.z;
+
+  float y_minimum = z * (tan(vertical_fov_radians_ /2));
+  // Minimum y value appearing on screen at z distance
+  float x_minimum = y_minimum * (1.0/aspect_ratio_);
+  // Minimum x value appearing on screen at z distance
+
+  float x = (tracked_anchor.x * (-x_minimum - x_minimum)) + x_minimum;
+  float y = (tracked_anchor.y * (-y_minimum - y_minimum)) + y_minimum;
+
+  Eigen::Vector3f t_vector(x,y,z);
   return t_vector;
 }
 

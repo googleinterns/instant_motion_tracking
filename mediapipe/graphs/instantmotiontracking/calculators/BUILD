@@ -43,22 +43,6 @@ cc_library(
 )
 
 cc_library(
-    name = "translation_manager_calculator",
-    srcs = ["translation_manager_calculator.cc"],
-    deps = [
-        ":transformations",
-        "//mediapipe/framework:calculator_framework",
-        "//mediapipe/framework/port:integral_types",
-        "//mediapipe/framework/port:logging",
-        "//mediapipe/framework/port:ret_check",
-        "//mediapipe/framework/port:source_location",
-        "//mediapipe/framework/port:status",
-        "//mediapipe/framework:timestamp",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
     name = "matrices_manager",
     srcs = ["matrices_manager.cc"],
     deps = [
