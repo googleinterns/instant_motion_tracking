@@ -64,3 +64,21 @@ cc_library(
     ],
     alwayslink = 1,
 )
+
+cc_library(
+    name = "gl_animation_overlay_calculator",
+    srcs = ["gl_animation_overlay_calculator.cc"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//mediapipe/graphs/object_detection_3d/calculators:camera_parameters_cc_proto",
+        "//mediapipe/graphs/object_detection_3d/calculators:gl_animation_overlay_calculator_cc_proto",
+        "//mediapipe/graphs/object_detection_3d/calculators:model_matrix_cc_proto",
+        "//mediapipe/framework:calculator_framework",
+        "//mediapipe/framework/port:ret_check",
+        "//mediapipe/framework/port:status",
+        "//mediapipe/gpu:gl_calculator_helper",
+        "//mediapipe/gpu:shader_util",
+        "//mediapipe/util/android:asset_manager_util",
+    ],
+    alwayslink = 1,
+)
