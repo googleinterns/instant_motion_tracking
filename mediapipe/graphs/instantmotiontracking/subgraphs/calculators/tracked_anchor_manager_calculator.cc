@@ -27,16 +27,20 @@ constexpr char kBoxesInputTag[] = "BOXES";
 constexpr char kBoxesOutputTag[] = "START_POS";
 constexpr char kCancelTag[] = "CANCEL_ID";
 
-// Generates the final model matrix rotations via the IMU (orientation sensors)
-// of the device and user rotation information
+// This calculator manages the regions being tracked for each individual sticker
+// and adjusts the regions being tracked if a change is detected in a sticker's
+// initial anchor placement. Regions being tracked that have no associated sticker
+// will be automatically removed upon the next iteration of the graph to optimize
+// performance and remove all sticker artifacts
 //
 // Input:
-//  ANCHORS - Initial anchor data (tracks changes and where to re/position)
-//  BOXES - Used in cycle, boxes being tracked meant to update positions
+//  ANCHORS - Initial anchor data (tracks changes and where to re/position) [REQUIRED]
+//  BOXES - Used in cycle, boxes being tracked meant to update positions [OPTIONAL
+//  - provided by subgraph]
 // Output:
-//  START_POS - Positions of boxes being tracked (can be overwritten with ID)
-//  CANCEL_ID - Single integer ID of tracking box to remove from tracker subgraph
-//  ANCHORS - Updated set of anchors with tracked and normalized X,Y,Z
+//  START_POS - Positions of boxes being tracked (can be overwritten with ID) [REQUIRED]
+//  CANCEL_ID - Single integer ID of tracking box to remove from tracker subgraph [OPTIONAL]
+//  ANCHORS - Updated set of anchors with tracked and normalized X,Y,Z [REQUIRED]
 //
 // Example config:
 // node {
@@ -55,12 +59,13 @@ constexpr char kCancelTag[] = "CANCEL_ID";
 class TrackedAnchorManagerCalculator : public CalculatorBase {
 private:
   std::vector<Anchor> previous_anchor_data_;
-  const float box_h_w_ = 0.5; // Used to establish tracking box dimensions
+  const float box_h_w_ = 0.15; // Used to establish tracking box dimensions
 
 public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
-    RET_CHECK(!cc->Inputs().GetTags().empty());
-    RET_CHECK(!cc->Outputs().GetTags().empty());
+    RET_CHECK(cc->Inputs().HasTag(kAnchorsTag));
+    RET_CHECK(cc->Outputs().HasTag(kAnchorsTag)
+      && cc->Outputs().HasTag(kBoxesOutputTag));
 
     if(cc->Inputs().HasTag(kAnchorsTag)) {
       cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
@@ -98,7 +103,7 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
   std::vector<Anchor> tracked_scaled_anchor_data;
 
   // Update from tracking system or add anchor to tracking system
-  for(const Anchor previous_anchor : previous_anchor_data_) {
+  for(const Anchor &previous_anchor : previous_anchor_data_) {
     for(Anchor current_anchor : current_anchor_data) {
       if(previous_anchor.sticker_id == current_anchor.sticker_id) {
         // Check if anchor was repositioned by user, and reset tracking box
@@ -112,13 +117,20 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
           box->set_time_msec(cc->InputTimestamp().Microseconds() / 1000);
           current_anchor.z = 1.0; // Default value for normalized z (scale factor)
         }
-        // If anchor was not repositioned, update the location from the tracking system
-        else if (cc->Inputs().HasTag(kBoxesInputTag) && !cc->Inputs().Tag(kBoxesInputTag).IsEmpty()) {
-          for(const auto& box : cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>().box())
+        // If anchor was not repositioned, update the location from the tracking system if associated box exists
+        else if (cc->Inputs().HasTag(kBoxesInputTag)) {
+          const TimedBoxProtoList box_list = cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>();
+          for(const auto& box : box_list.box())
           {
             if(box.id() == current_anchor.sticker_id) {
+              // Get center x normalized coordinate [0.0-1.0]
               current_anchor.x = (box.left() + box.right())/2;
+
+              // Get center y normalized coordinate [0.0-1.0]
               current_anchor.y = (box.top() + box.bottom())/2;
+
+              // Get center z coordinate [z starts at normalized 1.0 and scales inversely with box-width]
+              // TODO: Look into issues with uniform scaling on x-axis and y-axis
               current_anchor.z = box_h_w_/(box.right() - box.left());
             }
           }
@@ -140,6 +152,7 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
       }
     }
     if(!anchor_is_being_tracked) {
+      // TODO: Pass in vector of boxes to prevent breaking of terms from SetOffset
       cc->Outputs().Tag(kCancelTag).AddPacket(MakePacket<int>(box.id()).At(timestamp++));
     }
   }

@@ -51,16 +51,10 @@ Now, navigate to the MediaPipe directory and run the following command to build 
 bazel build -c opt --config=android_arm64 mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking
 ```
 
-Once the app is built, install it on an Android device with:
+Once the app is built, install it on an Android device with ('install -r' if for reinstall with retained app data):
 
 ```bash
 adb install bazel-bin/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/instantmotiontracking.apk
-```
-
-If you are reinstalling the application via adb, use '-r' to maintain the previous application data:
-
-```bash
-adb install -r bazel-bin/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/instantmotiontracking.apk
 ```
 
 ## Graph

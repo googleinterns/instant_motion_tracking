@@ -80,14 +80,14 @@ class MatricesManagerCalculator : public CalculatorBase {
     Eigen::Matrix3f generateRotationSubmatrix(const float roll, const float pitch, const float yaw, const float user_rotation_radians);
     // TODO: Adjust lookup function if total number of stickers is uncapped to improve performance
     float getUserScaling(std::vector<UserScaling> scalings, int sticker_id) {
-      for (UserScaling user_scaling : scalings) {
+      for (const UserScaling &user_scaling : scalings) {
         if (user_scaling.sticker_id == sticker_id) {
           return user_scaling.scaling_increment;
         }
       }
     }
     float getUserRotation(std::vector<UserRotation> rotations, int sticker_id) {
-      for (UserRotation rotation : rotations) {
+      for (const UserRotation &rotation : rotations) {
         if (rotation.sticker_id == sticker_id) {
           return rotation.radians;
         }
@@ -150,7 +150,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   const float pitch = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[1];
   const float yaw = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[2];
 
-  for (const Anchor anchor : translation_data) {
+  for (const Anchor &anchor : translation_data) {
     int id = anchor.sticker_id;
 
     TimedModelMatrixProto* model_matrix =

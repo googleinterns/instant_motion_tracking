@@ -419,7 +419,6 @@ public class MainActivity extends AppCompatActivity {
   }
 
   private void prepareDemoAssets() {
-    AndroidAssetUtil.initializeNativeAssetManager(this);
     // We render from raw data with openGL, so disable decoding preprocessing
     BitmapFactory.Options decodeOptions = new BitmapFactory.Options();
     decodeOptions.inScaled = false;
