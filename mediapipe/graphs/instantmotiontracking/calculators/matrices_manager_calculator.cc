@@ -29,29 +29,39 @@
 
 namespace mediapipe {
 
-using Matrix4fRM = Eigen::Matrix<float, 4, 4, Eigen::RowMajor>;
-
-constexpr char kFinalTranslationsTag[] = "TRANSLATION_DATA";
-constexpr char kIMUDataTag[] = "IMU_DATA";
-constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
-constexpr char kUserScalingsTag[] = "USER_SCALINGS";
-constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
-
+namespace {
+  using Matrix4fRM = Eigen::Matrix<float, 4, 4, Eigen::RowMajor>;
+  constexpr char kAnchorsTag[] = "ANCHORS";
+  constexpr char kIMUDataTag[] = "IMU_DATA";
+  constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
+  constexpr char kUserScalingsTag[] = "USER_SCALINGS";
+  constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
+  // (68 degrees, 4:3 for Pixel 4)
+  const float vertical_fov_radians_ = (68.0f) * M_PI / 180.0f;
+  const float aspect_ratio_ = (4.0f / 3.0f);
+  // initial Z value (-98 is just in visual range for OpenGL render)
+  const float initial_z_ = -98;
+}
 
 // Intermediary for rotation and translation data to model matrix usable by
 // gl_animation_overlay_calculator
 //
+// All inputs are required for intended functionality (scaling, rotations, etc.)
+// however, no inputs are required to run without errors
+//
 // Input:
-//  IMU_DATA - float[3] of [roll, pitch, yaw] of device
-//  USER_ROTATIONS - UserRotations with corresponding radians of rotation
+//  ANCHORS - Anchor data with normalized x,y,z coordinates [REQUIRED]
+//  IMU_DATA - float[3] of [roll, pitch, yaw] of device [REQUIRED]
+//  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  TRANSLATION_DATA - All stickers final translation data (vector of
-//  Translation objects)
+//  Translation objects) [REQUIRED]
 // Output:
-//  MODEL_MATRICES - TimedModelMatrixProtoList of all objects to render
+//  MODEL_MATRICES - TimedModelMatrixProtoList of all objects to render [REQUIRED]
 //
 // Example config:
 // node{
 //  calculator: "MatricesManagerCalculator"
+//  input_stream: "ANCHORS:tracked_scaled_anchor_data"
 //  input_stream: "IMU_DATA:imu_data"
 //  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "TRANSLATION_DATA:final_translation_data"
@@ -59,49 +69,44 @@ constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
 // }
 
 class MatricesManagerCalculator : public CalculatorBase {
-private:
-  // (68 degrees, 4:3 for Pixel 4)
-  const float vertical_fov_radians_ = (68.0f) * M_PI / 180.0f;
-  const float aspect_ratio_ = (4.0f / 3.0f);
-  // initial Z value (-98 is just in visual range for OpenGL render)
-  const float initial_z_ = -98;
-
- public:
-  static ::mediapipe::Status GetContract(CalculatorContract* cc);
-  ::mediapipe::Status Open(CalculatorContext* cc) override;
-  ::mediapipe::Status Process(CalculatorContext* cc) override;
-  Matrix4fRM generateEigenModelMatrix(Eigen::Vector3f translation_vector,
-    Eigen::Matrix3f rotation_submatrix);
-  Eigen::Vector3f generateTranslationVector(Anchor tracked_anchor, float user_scaling_increment);
-  Eigen::Matrix3f generateRotationSubmatrix(float roll, float pitch, float yaw, float user_rotation_radians);
-
-  float getUserScaling(std::vector<UserScaling> scalings, int sticker_id) {
-    for (UserScaling user_scaling : scalings) {
-      if (user_scaling.sticker_id == sticker_id) {
-        return user_scaling.scaling_increment;
+  public:
+    static ::mediapipe::Status GetContract(CalculatorContract* cc);
+    ::mediapipe::Status Open(CalculatorContext* cc) override;
+    ::mediapipe::Status Process(CalculatorContext* cc) override;
+  private:
+    Matrix4fRM generateEigenModelMatrix(const Eigen::Vector3f translation_vector,
+      const Eigen::Matrix3f rotation_submatrix);
+    Eigen::Vector3f generateTranslationVector(const Anchor tracked_anchor, const float user_scaling_increment);
+    Eigen::Matrix3f generateRotationSubmatrix(const float roll, const float pitch, const float yaw, const float user_rotation_radians);
+    // TODO: Adjust lookup function if total number of stickers is uncapped to improve performance
+    float getUserScaling(std::vector<UserScaling> scalings, int sticker_id) {
+      for (UserScaling user_scaling : scalings) {
+        if (user_scaling.sticker_id == sticker_id) {
+          return user_scaling.scaling_increment;
+        }
       }
     }
-  }
-
-  float getUserRotation(std::vector<UserRotation> rotations, int sticker_id) {
-    for (UserRotation rotation : rotations) {
-      if (rotation.sticker_id == sticker_id) {
-        return rotation.radians;
+    float getUserRotation(std::vector<UserRotation> rotations, int sticker_id) {
+      for (UserRotation rotation : rotations) {
+        if (rotation.sticker_id == sticker_id) {
+          return rotation.radians;
+        }
       }
     }
-  }
-
 };
 
 REGISTER_CALCULATOR(MatricesManagerCalculator);
 
 ::mediapipe::Status MatricesManagerCalculator::GetContract(
     CalculatorContract* cc) {
-  RET_CHECK(!cc->Inputs().GetTags().empty());
-  RET_CHECK(!cc->Outputs().GetTags().empty());
+  RET_CHECK(cc->Inputs().HasTag(kAnchorsTag)
+    && cc->Inputs().HasTag(kIMUDataTag)
+    && cc->Inputs().HasTag(kUserRotationsTag)
+    && cc->Inputs().HasTag(kUserScalingsTag));
+  RET_CHECK(cc->Outputs().HasTag(kModelMatricesTag));
 
-  if (cc->Inputs().HasTag(kFinalTranslationsTag)) {
-    cc->Inputs().Tag(kFinalTranslationsTag).Set<std::vector<Anchor>>();
+  if (cc->Inputs().HasTag(kAnchorsTag)) {
+    cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
   }
   if (cc->Inputs().HasTag(kIMUDataTag)) {
     cc->Inputs().Tag(kIMUDataTag).Set<float[]>();
@@ -137,7 +142,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
 
   const std::vector<Anchor> translation_data =
       cc->Inputs()
-          .Tag(kFinalTranslationsTag)
+          .Tag(kAnchorsTag)
           .Get<std::vector<Anchor>>();
 
   // Device IMU Data definitions
@@ -145,7 +150,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   const float pitch = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[1];
   const float yaw = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[2];
 
-  for (Anchor anchor : translation_data) {
+  for (const Anchor anchor : translation_data) {
     int id = anchor.sticker_id;
 
     TimedModelMatrixProto* model_matrix =
@@ -155,8 +160,8 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     float rotation = getUserRotation(user_rotation_data, id);
     float scaling = getUserScaling(user_scaling_data, id);
 
-    Eigen::Vector3f translation_vector = generateTranslationVector(anchor, scaling);
-    Eigen::Matrix3f rotation_submatrix = generateRotationSubmatrix(roll, pitch, yaw, rotation);
+    const Eigen::Vector3f translation_vector = generateTranslationVector(anchor, scaling);
+    const Eigen::Matrix3f rotation_submatrix = generateRotationSubmatrix(roll, pitch, yaw, rotation);
 
     Matrix4fRM mvp_matrix = generateEigenModelMatrix(translation_vector, rotation_submatrix);
 
@@ -180,6 +185,7 @@ Eigen::Vector3f MatricesManagerCalculator::generateTranslationVector(Anchor trac
   // Convert from normalized [0.0-1.0] to openGL on-screen coordinates
   float z = (initial_z_ + user_scaling_increment) * tracked_anchor.z;
 
+  // TODO: Investigate possible differences in warping of tracking speed across screen
   float y_minimum = z * (tan(vertical_fov_radians_ /2));
   // Minimum y value appearing on screen at z distance
   float x_minimum = y_minimum * (1.0/aspect_ratio_);
@@ -207,14 +213,15 @@ Matrix4fRM MatricesManagerCalculator::generateEigenModelMatrix(
     Eigen::Vector3f translation_vector, Eigen::Matrix3f rotation_submatrix) {
   // Define basic empty model matrix
   Matrix4fRM mvp_matrix;
-  mvp_matrix << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-      0.0, 0.0, 1.0;  // trailing 1.0 required by OpenGL
 
   // Set the translation vector
   mvp_matrix.bottomLeftCorner<1, 3>() = translation_vector;
 
   // Set the rotation submatrix
   mvp_matrix.topLeftCorner<3, 3>() = rotation_submatrix;
+
+  // Set trailing 1.0 required by OpenGL to define coordinate space
+  mvp_matrix(3,3) = 1.0;
 
   return mvp_matrix;
 }

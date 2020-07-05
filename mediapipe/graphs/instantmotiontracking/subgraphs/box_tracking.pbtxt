@@ -21,6 +21,7 @@ input_stream: "START_POS:start_pos"
 input_stream: "CANCEL_ID:cancel_object_id"
 output_stream: "BOXES:boxes"
 
+# TODO: GlScalerCalculator in succession to prevent aliasing artifacts
 node: {
   calculator: "ImageTransformationCalculator"
   input_stream: "IMAGE_GPU:input_video"

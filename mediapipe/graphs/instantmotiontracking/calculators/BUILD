@@ -23,7 +23,6 @@ exports_files(["LICENSE"])
 cc_library(
     name = "transformations",
     srcs = ["transformations.h"],
-    alwayslink = 1,
 )
 
 cc_library(
@@ -32,35 +31,35 @@ cc_library(
     deps = [
         ":transformations",
         "//mediapipe/framework:calculator_framework",
+        "//mediapipe/framework:timestamp",
         "//mediapipe/framework/port:integral_types",
         "//mediapipe/framework/port:logging",
         "//mediapipe/framework/port:ret_check",
         "//mediapipe/framework/port:source_location",
         "//mediapipe/framework/port:status",
-        "//mediapipe/framework:timestamp",
     ],
     alwayslink = 1,
 )
 
 cc_library(
-    name = "matrices_manager",
-    srcs = ["matrices_manager.cc"],
+    name = "matrices_manager_calculator",
+    srcs = ["matrices_manager_calculator.cc"],
     deps = [
         ":transformations",
+        "@eigen_archive//:eigen",
         "//mediapipe/framework:calculator_framework",
+        "//mediapipe/framework:timestamp",
+        "//mediapipe/framework/formats:detection_cc_proto",
+        "//mediapipe/framework/formats:image_frame",
+        "//mediapipe/framework/formats:image_frame_opencv",
       	"//mediapipe/framework/port:integral_types",
       	"//mediapipe/framework/port:logging",
       	"//mediapipe/framework/port:opencv_imgproc",
       	"//mediapipe/framework/port:ret_check",
       	"//mediapipe/framework/port:source_location",
       	"//mediapipe/framework/port:status",
-      	"//mediapipe/framework/formats:detection_cc_proto",
-      	"//mediapipe/graphs/object_detection_3d/calculators:model_matrix_cc_proto",
+        "//mediapipe/graphs/object_detection_3d/calculators:model_matrix_cc_proto",
       	"//mediapipe/graphs/object_detection_3d/calculators:box",
-      	"//mediapipe/framework:timestamp",
-      	"//mediapipe/framework/formats:image_frame",
-      	"//mediapipe/framework/formats:image_frame_opencv",
-      	"@eigen_archive//:eigen",
     ],
     alwayslink = 1,
 )
@@ -70,14 +69,14 @@ cc_library(
     srcs = ["gl_animation_overlay_calculator.cc"],
     visibility = ["//visibility:public"],
     deps = [
-        "//mediapipe/graphs/object_detection_3d/calculators:camera_parameters_cc_proto",
-        "//mediapipe/graphs/object_detection_3d/calculators:gl_animation_overlay_calculator_cc_proto",
-        "//mediapipe/graphs/object_detection_3d/calculators:model_matrix_cc_proto",
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework/port:ret_check",
         "//mediapipe/framework/port:status",
         "//mediapipe/gpu:gl_calculator_helper",
         "//mediapipe/gpu:shader_util",
+        "//mediapipe/graphs/object_detection_3d/calculators:camera_parameters_cc_proto",
+        "//mediapipe/graphs/object_detection_3d/calculators:gl_animation_overlay_calculator_cc_proto",
+        "//mediapipe/graphs/object_detection_3d/calculators:model_matrix_cc_proto",
         "//mediapipe/util/android:asset_manager_util",
     ],
     alwayslink = 1,

@@ -25,9 +25,15 @@ import java.util.ArrayList;
 public class Sticker {
 
   private int renderID = 0; // ID of object to render
+
   private float xAnchor, yAnchor; // Normalized X and Y coordinates of anchor
+  // (0,0) lies at top-left corner of screen
+  // (1.0,1.0) lies at bottom-right corner of screen
+
   private float userRotation, userScaling; // User alterations to scaling and rotation
+
   private int stickerID; // Unique sticker integer ID
+
   private static int globalIDLimit = 1; // Used to determine next stickerID
 
   public Sticker() {
@@ -76,7 +82,7 @@ public class Sticker {
     return this.userRotation;
   }
 
-  /** Sets pixel-length of new scalling (objective scaling, does not increment). * */
+  /** Sets pixel-length of new scaling (objective scaling, does not increment). * */
   public void setScaling(float scaling) {
     this.userScaling = scaling;
   }

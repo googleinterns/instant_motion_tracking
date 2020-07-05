@@ -90,6 +90,10 @@ public class MainActivity extends AppCompatActivity {
   private ArrayList<Sticker> stickerList;
   private Sticker currentSticker; // Sticker being edited
 
+  // Define parameters for 'reactivity' of object
+  private final float ROTATION_SPEED = 5.0f;
+  private final float SCALING_SPEED = 0.05f;
+
   private float[] imuData = new float[3]; // [roll,pitch,yaw]
 
   // Assets for object rendering
@@ -183,6 +187,7 @@ public class MainActivity extends AppCompatActivity {
           if (System.currentTimeMillis() - clickStartMillis <= CLICK_DURATION) { recordClick(event); }
           break;
         case (MotionEvent.ACTION_MOVE):
+          // Rotation and Scaling are independent events and can occur simulataneously
           if (event.getPointerCount() == 2) {
             if (event.getHistorySize() > 1) {
               // Calculate user scaling of sticker
@@ -199,9 +204,9 @@ public class MainActivity extends AppCompatActivity {
     return true;
   }
 
-  // Given a MotionEvent with history > 2, calculate the radians of rotation between two fingers (+/-)
+  // If our fingers are moved in a rotation, then our rotation factor will change
+  // by the sum of the rotation of both fingers in radians
   public float calculateRotationRadians(MotionEvent event) {
-    float rotation_speed = 5.0f;
     float tangentA =
             (float)
                     Math.atan2(
@@ -213,13 +218,13 @@ public class MainActivity extends AppCompatActivity {
                             event.getHistoricalX(1, 0) - event.getHistoricalX(0, 0));
     float angle = ((float) Math.toDegrees(tangentA - tangentB)) % 360f;
     angle += ((angle < -180f) ? (+360f) : ((angle > 180f) ? -360f : 0.0f));
-    float rotationIncrement = (float) (Math.PI * ((angle * rotation_speed) / 180));
+    float rotationIncrement = (float) (Math.PI * ((angle * ROTATION_SPEED) / 180));
     return rotationIncrement;
   }
 
-  // Given a MotionEvent with history > 2, calculate the normalized distance of scaling between two fingers (+/-)
+  // If our finger-to-finger distance increased, so will our scaling.
+  // The amount is determined by the sum of the distances moved by both fingers
   public float calculateScalingDistance(MotionEvent event) {
-    float scaling_speed = 0.05f;
     double new_distance =
             distance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
     double old_distance =
@@ -230,8 +235,8 @@ public class MainActivity extends AppCompatActivity {
                     event.getHistoricalY(1, 0));
     float sign_float =
             (new_distance < old_distance)
-                    ? -scaling_speed
-                    : scaling_speed; // Are they moving towards each other?
+                    ? -SCALING_SPEED
+                    : SCALING_SPEED; // Are they moving towards each other?
     double dist1 =
             distance(
                     event.getX(0),
@@ -289,7 +294,7 @@ public class MainActivity extends AppCompatActivity {
     else {
         buttonLayout.removeAllViews();
         // Display stickers
-        for(final Sticker sticker:stickerList) {
+        for(final Sticker sticker : stickerList) {
             final ImageButton stickerButton = new ImageButton(this);
             stickerButton.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {

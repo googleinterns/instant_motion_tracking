@@ -32,12 +32,12 @@ constexpr char kRenderDescriptorsTag[] = "RENDER_DATA";
 // should_reset_anchor:true)(sticker_id:2.............."
 //
 // Input:
-//  STRING - String of sticker data in appropriate parse format
+//  STRING - String of sticker data in appropriate parse format [REQUIRED]
 // Output:
-//  ANCHORS - Anchors with initial normalized X,Y coordinates
-//  USER_ROTATIONS - UserRotations with radians of rotation from user
-//  USER_SCALINGS - UserScalings with increment of scaling from user
-//  RENDER_DATA - Descriptors of which objects/animations to render for stickers
+//  ANCHORS - Anchors with initial normalized X,Y coordinates [REQUIRED]
+//  USER_ROTATIONS - UserRotations with radians of rotation from user [REQUIRED]
+//  USER_SCALINGS - UserScalings with increment of scaling from user [REQUIRED]
+//  RENDER_DATA - Descriptors of which objects/animations to render for stickers [REQUIRED]
 //
 // Example config:
 // node {
@@ -52,8 +52,11 @@ constexpr char kRenderDescriptorsTag[] = "RENDER_DATA";
 class StickerManagerCalculator : public CalculatorBase {
  public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
-    RET_CHECK(!cc->Inputs().GetTags().empty());
-    RET_CHECK(!cc->Outputs().GetTags().empty());
+    RET_CHECK(cc->Inputs().HasTag(kStringTag));
+    RET_CHECK(cc->Outputs().HasTag(kAnchorsTag)
+      && cc->Outputs().HasTag(kUserRotationsTag)
+      && cc->Outputs().HasTag(kUserScalingsTag)
+      && cc->Outputs().HasTag(kRenderDescriptorsTag));
 
     if (cc->Inputs().HasTag(kStringTag)) {
       cc->Inputs().Tag(kStringTag).Set<std::string>();

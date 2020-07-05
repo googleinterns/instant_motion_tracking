@@ -21,7 +21,7 @@ cc_library(
     deps = [
         "//mediapipe/graphs/instantmotiontracking/subgraphs:region_tracking",
         "//mediapipe/graphs/instantmotiontracking/calculators:sticker_manager_calculator",
-        "//mediapipe/graphs/instantmotiontracking/calculators:matrices_manager",
+        "//mediapipe/graphs/instantmotiontracking/calculators:matrices_manager_calculator",
         "//mediapipe/graphs/instantmotiontracking/calculators:gl_animation_overlay_calculator",
     ],
 )

@@ -42,8 +42,8 @@ mediapipe_simple_subgraph(
     graph = "region_tracking.pbtxt",
     register_as = "RegionTrackingSubgraph",
     deps = [
-        "//mediapipe/graphs/instantmotiontracking/subgraphs/calculators:tracked_anchor_manager_calculator",
         ":box_tracking",
+        "//mediapipe/graphs/instantmotiontracking/subgraphs/calculators:tracked_anchor_manager_calculator",
     ],
 
 )
