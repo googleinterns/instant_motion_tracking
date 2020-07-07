@@ -146,9 +146,9 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
           .Get<std::vector<Anchor>>();
 
   // Device IMU Data definitions
-  const float roll = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[0];
+  const float yaw = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[0];
   const float pitch = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[1];
-  const float yaw = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[2];
+  const float roll = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[2];
 
   for (const Anchor &anchor : translation_data) {
     int id = anchor.sticker_id;
@@ -161,7 +161,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     float scaling = getUserScaling(user_scaling_data, id);
 
     const Eigen::Vector3f translation_vector = generateTranslationVector(anchor, scaling);
-    const Eigen::Matrix3f rotation_submatrix = generateRotationSubmatrix(roll, pitch, yaw, rotation);
+    const Eigen::Matrix3f rotation_submatrix = generateRotationSubmatrix(yaw, pitch, roll, rotation);
 
     Matrix4fRM mvp_matrix = generateEigenModelMatrix(translation_vector, rotation_submatrix);
 
@@ -199,12 +199,12 @@ Eigen::Vector3f MatricesManagerCalculator::generateTranslationVector(Anchor trac
 }
 
 // Generate the submatrix defining rotation using IMU data and user rotations
-Eigen::Matrix3f MatricesManagerCalculator::generateRotationSubmatrix(float roll, float pitch, float yaw, float user_rotation_radians) {
+Eigen::Matrix3f MatricesManagerCalculator::generateRotationSubmatrix(float yaw, float pitch, float roll, float user_rotation_radians) {
   Eigen::Matrix3f r_submatrix;
   r_submatrix =
-      Eigen::AngleAxisf(yaw - user_rotation_radians, Eigen::Vector3f::UnitY()) *
-      Eigen::AngleAxisf(pitch, Eigen::Vector3f::UnitZ()) *
-      Eigen::AngleAxisf(roll - (M_PI / 2), Eigen::Vector3f::UnitX());
+      Eigen::AngleAxisf(yaw, Eigen::Vector3f::UnitY()) *
+      Eigen::AngleAxisf(-roll, Eigen::Vector3f::UnitZ()) *
+      Eigen::AngleAxisf(pitch - M_PI/2, Eigen::Vector3f::UnitX());
   return r_submatrix;
 }
 

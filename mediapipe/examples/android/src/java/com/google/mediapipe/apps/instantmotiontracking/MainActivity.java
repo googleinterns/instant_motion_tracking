@@ -152,14 +152,26 @@ public class MainActivity extends AppCompatActivity {
 
     // Define sensor properties (only get one orientation sensor)
     SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-    List sensorList = sensorManager.getSensorList(Sensor.TYPE_ORIENTATION);
+    List sensorList = sensorManager.getSensorList(Sensor.TYPE_ROTATION_VECTOR);
     sensorManager.registerListener(new SensorEventListener() {
+
+      float[] orientation = new float[5];
+      float[] mRotationMatrix = new float[16];
+
       public void onAccuracyChanged(Sensor sensor, int accuracy) {}
       // Update procedure on sensor adjustment (phone changes orientation)
       public void onSensorChanged(SensorEvent event) {
-        imuData[0] = (float) Math.toRadians(event.values[1]);
-        imuData[1] = (float) Math.toRadians(event.values[2]);
-        imuData[2] = (float) Math.toRadians(event.values[0]);
+        SensorManager.getRotationMatrixFromVector(mRotationMatrix, event.values);
+        SensorManager.getOrientation(mRotationMatrix, orientation);
+
+        // Optionally convert the result from radians to degrees
+        //orientation[0] = (float) Math.toDegrees(orientation[0]);
+        //orientation[1] = (float) Math.toDegrees(orientation[1]);
+        //orientation[2] = (float) Math.toDegrees(orientation[2]);
+
+        imuData[0] = orientation[0];//yaw (float) Math.toRadians(event.values[1]);
+        imuData[1] = orientation[1];//pitch [-pi,pi] (float) Math.toRadians(event.values[2]);
+        imuData[2] = orientation[2];//roll (float) Math.toRadians(event.values[0]);
       }
     }, (Sensor) sensorList.get(0), SensorManager.SENSOR_DELAY_FASTEST);
 
