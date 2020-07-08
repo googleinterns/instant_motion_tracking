@@ -94,6 +94,14 @@ public class MainActivity extends AppCompatActivity {
   private final float ROTATION_SPEED = 5.0f;
   private final float SCALING_SPEED = 0.05f;
 
+  // Parameters of device visual field for rendering system
+  // (68 degrees, 4:3 for Pixel 4)
+  private final float VERTICAL_FOV_RADIANS = (float)Math.toRadians(68.0);
+  private final float ASPECT_RATIO = (4.0f/3.0f);
+  private final String FOV_SIDE_PACKET_TAG = "vertical_fov_radians";
+  private final String ASPECT_RATIO_SIDE_PACKET_TAG = "aspect_ratio";
+  // TODO: Make acquisition of this information automated
+
   private float[] imuData = new float[3]; // [roll,pitch,yaw]
 
   // Assets for object rendering
@@ -145,6 +153,12 @@ public class MainActivity extends AppCompatActivity {
     // Add frame listener to PacketManagement system
     mediaPipePacketManager = new MediaPipePacketManager();
     processor.setOnWillAddFrameListener(mediaPipePacketManager);
+
+    // Send device properties to render objects via OpenGL
+    Map<String, Packet> devicePropertiesSidePackets = new HashMap<>();
+    devicePropertiesSidePackets.put(ASPECT_RATIO_SIDE_PACKET_TAG, packetCreator.createFloat32(ASPECT_RATIO));
+    devicePropertiesSidePackets.put(FOV_SIDE_PACKET_TAG, packetCreator.createFloat32(VERTICAL_FOV_RADIANS));
+    processor.setInputSidePackets(devicePropertiesSidePackets);
 
     // Begin with 0 stickers in dataset
     stickerList = new ArrayList<Sticker>();
