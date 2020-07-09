@@ -92,7 +92,7 @@ public class MainActivity extends AppCompatActivity {
 
   // Define parameters for 'reactivity' of object
   private final float ROTATION_SPEED = 5.0f;
-  private final float SCALING_SPEED = 0.05f;
+  private final float SCALING_FACTOR = 0.025f;
 
   // Parameters of device visual field for rendering system
   // (68 degrees, 4:3 for Pixel 4)
@@ -164,28 +164,17 @@ public class MainActivity extends AppCompatActivity {
     stickerList = new ArrayList<Sticker>();
     currentSticker = null;
 
-    // Define sensor properties (only get one orientation sensor)
+    // TODO: Change to use ROTATION_VECTOR or non-deprecated IMU method
     SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-    List sensorList = sensorManager.getSensorList(Sensor.TYPE_ROTATION_VECTOR);
+    List sensorList = sensorManager.getSensorList(Sensor.TYPE_ORIENTATION);
     sensorManager.registerListener(new SensorEventListener() {
-
-      float[] orientation = new float[5];
-      float[] mRotationMatrix = new float[16];
 
       public void onAccuracyChanged(Sensor sensor, int accuracy) {}
       // Update procedure on sensor adjustment (phone changes orientation)
       public void onSensorChanged(SensorEvent event) {
-        SensorManager.getRotationMatrixFromVector(mRotationMatrix, event.values);
-        SensorManager.getOrientation(mRotationMatrix, orientation);
-
-        // Optionally convert the result from radians to degrees
-        //orientation[0] = (float) Math.toDegrees(orientation[0]);
-        //orientation[1] = (float) Math.toDegrees(orientation[1]);
-        //orientation[2] = (float) Math.toDegrees(orientation[2]);
-
-        imuData[0] = orientation[0];//yaw (float) Math.toRadians(event.values[1]);
-        imuData[1] = orientation[1];//pitch [-pi,pi] (float) Math.toRadians(event.values[2]);
-        imuData[2] = orientation[2];//roll (float) Math.toRadians(event.values[0]);
+        imuData[0] = (float) Math.toRadians(event.values[0]);
+        imuData[1] = (float) Math.toRadians(event.values[1]);
+        imuData[2] = (float) Math.toRadians(event.values[2]);
       }
     }, (Sensor) sensorList.get(0), SensorManager.SENSOR_DELAY_FASTEST);
 
@@ -217,8 +206,8 @@ public class MainActivity extends AppCompatActivity {
           if (event.getPointerCount() == 2) {
             if (event.getHistorySize() > 1) {
               // Calculate user scaling of sticker
-              float scalingIncrement = calculateScalingDistance(event);
-              currentSticker.setScaling(currentSticker.getScaling() + scalingIncrement);
+              float newScaleFactor = getNewScaleFactor(event, currentSticker.getScaleFactor());
+              currentSticker.setScaleFactor(newScaleFactor);
               // calculate rotation (radians) for dynamic y-axis rotations
               float rotationIncrement = calculateRotationRadians(event);
               currentSticker.setRotation(currentSticker.getRotation() + rotationIncrement);
@@ -249,8 +238,7 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // If our finger-to-finger distance increased, so will our scaling.
-  // The amount is determined by the sum of the distances moved by both fingers
-  public float calculateScalingDistance(MotionEvent event) {
+  public float getNewScaleFactor(MotionEvent event, float currentScaleFactor) {
     double new_distance =
             distance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
     double old_distance =
@@ -261,22 +249,10 @@ public class MainActivity extends AppCompatActivity {
                     event.getHistoricalY(1, 0));
     float sign_float =
             (new_distance < old_distance)
-                    ? -SCALING_SPEED
-                    : SCALING_SPEED; // Are they moving towards each other?
-    double dist1 =
-            distance(
-                    event.getX(0),
-                    event.getY(0),
-                    event.getHistoricalX(0, 0),
-                    event.getHistoricalY(0, 0));
-    double dist2 =
-            distance(
-                    event.getX(1),
-                    event.getY(1),
-                    event.getHistoricalX(1, 0),
-                    event.getHistoricalY(1, 0));
-    float scalingIncrement = sign_float * (float) (dist1 + dist2);
-    return scalingIncrement;
+                    ? -SCALING_FACTOR
+                    : SCALING_FACTOR; // Are they moving towards each other?
+    currentScaleFactor *= (1f + sign_float);
+    return currentScaleFactor;
   }
 
   public void recordClick(MotionEvent event) {

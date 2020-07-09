@@ -30,7 +30,8 @@ public class Sticker {
   // (0,0) lies at top-left corner of screen
   // (1.0,1.0) lies at bottom-right corner of screen
 
-  private float userRotation, userScaling; // User alterations to scaling and rotation
+  private float userRotation = 0f; // Rotation in radians from user
+  private float userScalingFactor = 1f; // Scaling factor as defined by user (defaults to 1.0)
 
   private int stickerID; // Unique sticker integer ID
 
@@ -82,13 +83,13 @@ public class Sticker {
     return this.userRotation;
   }
 
-  /** Sets pixel-length of new scaling (objective scaling, does not increment). * */
-  public void setScaling(float scaling) {
-    this.userScaling = scaling;
+  /** Sets new scale factor **/
+  public void setScaleFactor(float scaling) {
+    this.userScalingFactor = scaling;
   }
 
-  public float getScaling() {
-    return this.userScaling;
+  public float getScaleFactor() {
+    return this.userScalingFactor;
   }
 
   /**
@@ -111,7 +112,7 @@ public class Sticker {
               + ",\nsticker_rotation:"
               + sticker.getRotation()
               + ",\nsticker_scaling:"
-              + sticker.getScaling()
+              + sticker.getScaleFactor()
               + ",\nsticker_render_id:"
               + sticker.renderID
               + ")");
