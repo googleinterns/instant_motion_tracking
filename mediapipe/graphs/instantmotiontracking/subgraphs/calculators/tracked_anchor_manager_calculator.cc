@@ -26,6 +26,9 @@ constexpr char kAnchorsTag[] = "ANCHORS";
 constexpr char kBoxesInputTag[] = "BOXES";
 constexpr char kBoxesOutputTag[] = "START_POS";
 constexpr char kCancelTag[] = "CANCEL_ID";
+// TODO: Find optimal Height/Width (0.1-0.3)
+constexpr float kBoxHw = 0.2f; // Used to establish tracking box dimensions
+constexpr float millis_factor_ = 1000; // Used to convert from microseconds to millis
 
 // This calculator manages the regions being tracked for each individual sticker
 // and adjusts the regions being tracked if a change is detected in a sticker's
@@ -59,7 +62,6 @@ constexpr char kCancelTag[] = "CANCEL_ID";
 class TrackedAnchorManagerCalculator : public CalculatorBase {
 private:
   std::vector<Anchor> previous_anchor_data_;
-  const float box_h_w_ = 0.15; // Used to establish tracking box dimensions
 
 public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
@@ -109,12 +111,12 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
         // Check if anchor was repositioned by user, and reset tracking box
         if(previous_anchor.x != current_anchor.x || previous_anchor.y != current_anchor.y) {
           TimedBoxProto* box = pos_boxes->add_box();
-          box->set_left(current_anchor.x - box_h_w_/2);
-          box->set_right(current_anchor.x + box_h_w_/2);
-          box->set_top(current_anchor.y - box_h_w_/2);
-          box->set_bottom(current_anchor.y + box_h_w_/2);
+          box->set_left(current_anchor.x - kBoxHw * 0.5f);
+          box->set_right(current_anchor.x + kBoxHw * 0.5f);
+          box->set_top(current_anchor.y - kBoxHw * 0.5f);
+          box->set_bottom(current_anchor.y + kBoxHw * 0.5f);
           box->set_id(current_anchor.sticker_id);
-          box->set_time_msec(cc->InputTimestamp().Microseconds() / 1000);
+          box->set_time_msec(cc->InputTimestamp().Microseconds() / millis_factor_);
           current_anchor.z = 1.0; // Default value for normalized z (scale factor)
         }
         // If anchor was not repositioned, update the location from the tracking system if associated box exists
@@ -124,14 +126,14 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
           {
             if(box.id() == current_anchor.sticker_id) {
               // Get center x normalized coordinate [0.0-1.0]
-              current_anchor.x = (box.left() + box.right())/2;
+              current_anchor.x = (box.left() + box.right()) * 0.5f;
 
               // Get center y normalized coordinate [0.0-1.0]
-              current_anchor.y = (box.top() + box.bottom())/2;
+              current_anchor.y = (box.top() + box.bottom()) * 0.5f;
 
               // Get center z coordinate [z starts at normalized 1.0 and scales inversely with box-width]
               // TODO: Look into issues with uniform scaling on x-axis and y-axis
-              current_anchor.z = box_h_w_/(box.right() - box.left());
+              current_anchor.z = kBoxHw / (box.right() - box.left());
             }
           }
         }

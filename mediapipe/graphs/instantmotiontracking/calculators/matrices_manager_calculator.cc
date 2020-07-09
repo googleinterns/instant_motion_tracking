@@ -30,9 +30,10 @@
 namespace mediapipe {
 
 namespace {
-  using Matrix4fRM = Eigen::Matrix<float, 4, 4, Eigen::RowMajor>;
+  using Matrix4fCM = Eigen::Matrix<float, 4, 4, Eigen::ColMajor>;
   using Vector3f = Eigen::Vector3f;
   using Matrix3f = Eigen::Matrix3f;
+  using DiagonalMatrix3f = Eigen::DiagonalMatrix<float, 3>;
   constexpr char kAnchorsTag[] = "ANCHORS";
   constexpr char kIMUDataTag[] = "IMU_DATA";
   constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
@@ -48,10 +49,9 @@ namespace {
 }
 
 // Intermediary for rotation and translation data to model matrix usable by
-// gl_animation_overlay_calculator
-//
-// All inputs are required for intended functionality (scaling, rotations, etc.)
-// however, no inputs are required to run without errors
+// gl_animation_overlay_calculator. For information on the construction of OpenGL
+// objects and transformations (including a breakdown of model matrices), please
+// visit: https://open.gl/transformations
 //
 // Input Side Packets:
 //  FOV - Vertical field of view for device [REQUIRED - Defines perspective matrix]
@@ -82,10 +82,12 @@ class MatricesManagerCalculator : public CalculatorBase {
     ::mediapipe::Status Open(CalculatorContext* cc) override;
     ::mediapipe::Status Process(CalculatorContext* cc) override;
   private:
-    const Matrix4fRM GenerateEigenModelMatrix(const Vector3f translation_vector,
+    const DiagonalMatrix3f GenerateUserScalingMatrix(const float scale_factor);
+    const Matrix3f GenerateUserRotationMatrix(const float rotation_radians);
+    const Matrix4fCM GenerateEigenModelMatrix(const Vector3f translation_vector,
       const Matrix3f rotation_submatrix);
-    const Vector3f GenerateTranslationVector(const Anchor tracked_anchor, const float user_scaling_increment);
-    const Matrix3f GenerateRotationSubmatrix(const float roll, const float pitch, const float yaw, const float user_rotation_radians);
+    const Vector3f GenerateAnchorVector(const Anchor tracked_anchor);
+    const Matrix3f GenerateIMURotationSubmatrix(const float yaw, const float pitch, const float roll);
 
     // Returns a user scaling increment associated with the sticker_id
     // TODO: Adjust lookup function if total number of stickers is uncapped to improve performance
@@ -168,6 +170,8 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   const float yaw = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[0];
   const float pitch = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[1];
   const float roll = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[2];
+  // We can pre-generate the IMU submatrix as this remains unchanged for all objects
+  const Matrix3f imu_rotation_submatrix = GenerateIMURotationSubmatrix(yaw, pitch, roll);
 
   for (const Anchor &anchor : translation_data) {
     const int id = anchor.sticker_id;
@@ -176,17 +180,29 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
         model_matrix_list->add_model_matrix();
     model_matrix->set_id(id);
 
+    // The user transformation data associate with this sticker must be defined
     const float rotation = GetUserRotation(user_rotation_data, id);
-    const float scaling = GetUserScaler(user_scaling_data, id);
+    const float scaler = GetUserScaler(user_scaling_data, id);
 
-    const Vector3f translation_vector = GenerateTranslationVector(anchor, scaling);
-    const Matrix3f rotation_submatrix = GenerateRotationSubmatrix(yaw, pitch, roll, rotation);
-    const Matrix4fRM mvp_matrix = GenerateEigenModelMatrix(translation_vector, rotation_submatrix);
+    // A vector representative of a user's sticker rotation transformation can be created
+    const Matrix3f user_rotation_submatrix = GenerateUserRotationMatrix(rotation);
+    // The user transformation data can be concatenated into a final rotation submatrix with the
+    // device IMU rotational data
+    const Matrix3f rotation_submatrix = imu_rotation_submatrix * user_rotation_submatrix;
+
+    // Next, the submatrix representative of the user's scaling transformation must be generated
+    const DiagonalMatrix3f user_scaling_submatrix = GenerateUserScalingMatrix(scaler);
+
+    // A vector representative of the translation of the object in OpenGL coordinate space must be generated
+    const Vector3f translation_vector = GenerateAnchorVector(anchor);
+
+    // Concatenate all model matrix data
+    const Matrix4fCM final_model_matrix = GenerateEigenModelMatrix(translation_vector, user_scaling_submatrix * rotation_submatrix);
 
     // The generated model matrix must be mapped to TimedModelMatrixProto (col-wise)
-    for (int i = 0; i < mvp_matrix.rows(); ++i) {
-      for (int j = 0; j < mvp_matrix.cols(); ++j) {
-        model_matrix->add_matrix_entries(mvp_matrix(j, i));
+    for (int x = 0; x < final_model_matrix.rows(); ++x) {
+      for (int y = 0; y < final_model_matrix.cols(); ++y) {
+        model_matrix->add_matrix_entries(final_model_matrix(x, y));
       }
     }
   }
@@ -198,48 +214,80 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   return ::mediapipe::OkStatus();
 }
 
-// Using the tracked translation data, generate a vector for MVP translation
-const Vector3f MatricesManagerCalculator::GenerateTranslationVector(const Anchor tracked_anchor, const float user_scaling_increment) {
-  // Convert from normalized [0.0-1.0] to openGL on-screen coordinates
-  float z = (initial_z_ + user_scaling_increment) * tracked_anchor.z;
+// Using a specified rotation value in radians, generate a rotation matrix for use with base rotation submatrix
+const Matrix3f MatricesManagerCalculator::GenerateUserRotationMatrix(const float rotation_radians) {
+  Eigen::Matrix3f user_rotation_submatrix;
+    user_rotation_submatrix =
+        // The rotation in radians must be inverted to rotate the object
+        // with the direction of finger movement from the user (system dependent)
+        Eigen::AngleAxisf(-rotation_radians, Eigen::Vector3f::UnitY()) *
+        Eigen::AngleAxisf(0, Eigen::Vector3f::UnitZ()) *
+        Eigen::AngleAxisf(0, Eigen::Vector3f::UnitX());
+  // Matrix must be transposed due to the method of submatrix generation in Eigen
+  return user_rotation_submatrix.transpose();
+}
 
-  // TODO: Investigate possible differences in warping of tracking speed across screen
-  float y_minimum = z * (tan(vertical_fov_radians_ / 2));
-  // Minimum y value appearing on screen at z distance
-  float x_minimum = y_minimum * (1.0 / aspect_ratio_);
-  // Minimum x value appearing on screen at z distance
+// Using a specified scale factor, generate a scaling matrix for use with base rotation submatrix
+const DiagonalMatrix3f MatricesManagerCalculator::GenerateUserScalingMatrix(const float scale_factor) {
+  DiagonalMatrix3f scaling_matrix(scale_factor, scale_factor, scale_factor);
+  return scaling_matrix;
+}
 
-  float x = (tracked_anchor.x * (-x_minimum - x_minimum)) + x_minimum;
-  float y = (tracked_anchor.y * (-y_minimum - y_minimum)) + y_minimum;
+// TODO: Investigate possible differences in warping of tracking speed across screen
+// Using the sticker anchor data, a translation vector can be generated in OpenGL coordinate space
+const Vector3f MatricesManagerCalculator::GenerateAnchorVector(const Anchor tracked_anchor) {
+  // Using an initial_z value in OpenGL space, generate a new base z-axis value to mimic scaling by distance.
+  const float z = initial_z_ * tracked_anchor.z;
 
-  Vector3f t_vector(x,y,z);
+  // Using triangle geometry, the minimum for a y-coordinate that will appear in the view field
+  // for the given z value above can be found.
+  const float y_minimum = z * (tan(vertical_fov_radians_ / 2));
+
+  // The aspect ratio of the device and y_minimum calculated above can be used to find the
+  // minimum value for x that will appear in the view field of the device screen.
+  const float x_minimum = y_minimum * (1.0 / aspect_ratio_);
+
+  // Given the minimum bounds of the screen in OpenGL space, the tracked anchor coordinates
+  // can be converted to OpenGL coordinate space.
+  //
+  // (i.e: X and Y will be converted from [0.0-1.0] space to [x_minimum, -x_minimum] space
+  // and [y_minimum, -y_minimum] space respectively)
+  const float x = (-2 * tracked_anchor.x * x_minimum) + x_minimum;
+  const float y = (-2 * tracked_anchor.y * y_minimum) + y_minimum;
+
+  // A translation transformation vector can be generated via Eigen
+  const Vector3f t_vector(x,y,z);
   return t_vector;
 }
 
-// Generate the submatrix defining rotation using IMU data and user rotations
-const Matrix3f MatricesManagerCalculator::GenerateRotationSubmatrix(const float yaw, const float pitch, const float roll, const float user_rotation_radians) {
-  Matrix3f r_submatrix;
-  r_submatrix =
-      Eigen::AngleAxisf(yaw - user_rotation_radians, Eigen::Vector3f::UnitY()) *
-      // Roll must be negative due to the output from IMU sensors dictated by
-      // Android device sensor rules (view SENSOR_TYPE_ROTATION in Android api
-      // for specific information regarding IMU data acquisition)
-      Eigen::AngleAxisf(-roll, Eigen::Vector3f::UnitZ()) *
-      // Object must be rotated by Pi/2 radians on X axis in order to render upright at start
-      // When the .obj file was created, the default state was on it's side
-      // This adjustment is entirely dependent on the default state of the .obj file
-      Eigen::AngleAxisf(pitch - M_PI/2, Eigen::Vector3f::UnitX());
-  return r_submatrix;
+// Using the yaw, pitch, and roll, a rotation submatrix can be generated,
+// universal to each object appearing in the device view
+const Matrix3f MatricesManagerCalculator::GenerateIMURotationSubmatrix(
+  const float yaw, const float pitch, const float roll) {
+  Eigen::Matrix3f r_submatrix;
+    r_submatrix =
+        // The yaw value is associated with the Y-axis.
+        Eigen::AngleAxisf(yaw, Eigen::Vector3f::UnitY()) *
+        // The roll value is associated with the Z-axis.
+        Eigen::AngleAxisf(roll, Eigen::Vector3f::UnitZ()) *
+        // The pitch value is associated with the X-axis.
+        // The (-M_PI/2) must be added in order to adjust the default
+        // rendering of the object (the object should appear in the upright
+        // orientation upon initial render of the scene - this is entirely
+        // dependent on the construction of the .obj file).
+        Eigen::AngleAxisf(pitch - (M_PI / 2), Eigen::Vector3f::UnitX());
+    // Matrix must be transposed due to the method of submatrix generation in Eigen
+    return r_submatrix.transpose();
 }
 
 // Generates a model matrix via Eigen with appropriate transformations
-const Matrix4fRM MatricesManagerCalculator::GenerateEigenModelMatrix(
+const Matrix4fCM MatricesManagerCalculator::GenerateEigenModelMatrix(
     Vector3f translation_vector, Matrix3f rotation_submatrix) {
   // Define basic empty model matrix
-  Matrix4fRM mvp_matrix;
+  Matrix4fCM mvp_matrix;
 
   // Set the translation vector
-  mvp_matrix.bottomLeftCorner<1, 3>() = translation_vector;
+  mvp_matrix.topRightCorner<3, 1>() = translation_vector;
 
   // Set the rotation submatrix
   mvp_matrix.topLeftCorner<3, 3>() = rotation_submatrix;
