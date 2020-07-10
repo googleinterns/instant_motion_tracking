@@ -57,7 +57,10 @@ node {
   calculator: "GlAnimationOverlayCalculator"
   input_stream: "VIDEO:input_video"
   input_stream: "MODEL_MATRICES:model_matrices"
+  input_stream: "RENDER_DATA:sticker_render_data"
   output_stream: "output_video"
-  input_side_packet: "TEXTURE:obj_texture"
-  input_side_packet: "ANIMATION_ASSET:obj_asset_name"
+  input_side_packet: "ROBOT_TEXTURE:robot_texture"
+  input_side_packet: "ROBOT_ASSET:robot_asset_name"
+  input_side_packet: "DINO_TEXTURE:dino_texture"
+  input_side_packet: "DINO_ASSET:dino_asset_name"
 }

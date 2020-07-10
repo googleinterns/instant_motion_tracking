@@ -23,6 +23,8 @@ import java.util.ArrayList;
 // determines what object model to render for this unique sticker).
 
 public class Sticker {
+  public static int TOTAL_NUM_ASSETS = 2; // Total number of different types of
+  // objects that can be rendered
 
   private int renderID = 0; // ID of object to render
 
@@ -71,6 +73,16 @@ public class Sticker {
 
   public void setRenderAssetID(int newRenderID) {
     this.renderID = newRenderID;
+  }
+
+  /** Increments/Loops the render ID in order to change the object in scene **/
+  public void loopAssetID() {
+    if(getRenderAssetID() >= TOTAL_NUM_ASSETS - 1) {
+      setRenderAssetID(0);
+    }
+    else {
+      setRenderAssetID(getRenderAssetID() + 1);
+    }
   }
 
   /** Sets new user input of y-axis rotation (objective rotation, does not increment). * */

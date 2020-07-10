@@ -73,7 +73,7 @@ class StickerManagerCalculator : public CalculatorBase {
     if (cc->Outputs().HasTag(kRenderDescriptorsTag)) {
       cc->Outputs()
           .Tag(kRenderDescriptorsTag)
-          .Set<std::vector<RenderDescriptor>>();
+          .Set<std::vector<int>>();
     }
 
     return ::mediapipe::OkStatus();
@@ -91,13 +91,12 @@ class StickerManagerCalculator : public CalculatorBase {
     std::vector<Anchor> initial_anchor_data;
     std::vector<UserRotation> user_rotation_data;
     std::vector<UserScaling> user_scaling_data;
-    std::vector<RenderDescriptor> render_descriptor_data;
+    std::vector<int> render_descriptor_data;
 
     while (sticker_data_string.find(")") != -1) {
       Anchor initial_anchor;
       UserRotation user_rotation;
       UserScaling user_scaling;
-      RenderDescriptor render_descriptor;
       std::string stickerString = sticker_data_string.substr(
           sticker_data_string.find("(") + 1, sticker_data_string.find(")"));
 
@@ -108,8 +107,7 @@ class StickerManagerCalculator : public CalculatorBase {
       initial_anchor.sticker_id = sticker_id;
       user_rotation.sticker_id = sticker_id;
       user_scaling.sticker_id = sticker_id;
-      render_descriptor.sticker_id = sticker_id;
-
+      
       // Set the initial anchor data
       stickerString = findPastKey("sticker_anchor_x:", stickerString);
       initial_anchor.x =
@@ -131,7 +129,7 @@ class StickerManagerCalculator : public CalculatorBase {
 
       // Set render data
       stickerString = findPastKey("sticker_render_id:", stickerString);
-      render_descriptor.render_object_id =
+      int render_object_id =
           std::stoi(stickerString.substr(0, stickerString.length()));
       sticker_data_string = sticker_data_string.substr(
           sticker_data_string.find(")") + 1, sticker_data_string.length());
@@ -140,7 +138,7 @@ class StickerManagerCalculator : public CalculatorBase {
       initial_anchor_data.emplace_back(initial_anchor);
       user_rotation_data.emplace_back(user_rotation);
       user_scaling_data.emplace_back(user_scaling);
-      render_descriptor_data.emplace_back(render_descriptor);
+      render_descriptor_data.emplace_back(render_object_id);
     }
 
     if (cc->Outputs().HasTag(kAnchorsTag)) {
@@ -165,7 +163,7 @@ class StickerManagerCalculator : public CalculatorBase {
       cc->Outputs()
           .Tag(kRenderDescriptorsTag)
           .AddPacket(
-              MakePacket<std::vector<RenderDescriptor>>(render_descriptor_data)
+              MakePacket<std::vector<int>>(render_descriptor_data)
                   .At(cc->InputTimestamp()));
     }
 

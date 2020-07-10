@@ -44,8 +44,8 @@ namespace {
   // (68 degrees, 4:3 for Pixel 4)
   float vertical_fov_radians_ = 0;
   float aspect_ratio_ = 0;
-  // initial Z value (-98 is just in visual range for OpenGL render)
-  const float initial_z_ = -98;
+  // initial Z value (-50 is center point in visual range for OpenGL render)
+  const float initial_z_ = -50;
 }
 
 // Intermediary for rotation and translation data to model matrix usable by

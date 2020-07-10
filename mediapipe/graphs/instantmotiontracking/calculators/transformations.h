@@ -32,12 +32,6 @@ typedef struct Anchor {
    int sticker_id;
 };
 
-// Used to determine which object to render in overlay calculator
-typedef struct RenderDescriptor {
-   int render_object_id;
-   int sticker_id;
-};
-
 // Representative of a translation transformation in OpenGL space
 typedef struct Translation {
    float x;

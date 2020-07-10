@@ -49,13 +49,6 @@ typedef GpuBuffer AssetTextureFormat;
 
 enum { ATTRIB_VERTEX, ATTRIB_TEXTURE_POSITION, NUM_ATTRIBUTES };
 static const int kNumMatrixEntries = 16;
-
-// Hard-coded MVP Matrix for testing.
-static const float kModelMatrix[] = {0.83704215,  -0.36174262, 0.41049102, 0.0,
-                                     0.06146407,  0.8076706,   0.5864218,  0.0,
-                                     -0.54367524, -0.4656292,  0.69828844, 0.0,
-                                     0.0,         0.0,         -98.64117,  1.0};
-
 // Loads a texture from an input side packet, and streams in an animation file
 // from a filename given in another input side packet, and renders the animation
 // over the screen according to the input timestamp and desired animation FPS.
@@ -123,13 +116,11 @@ class GlAnimationOverlayCalculator : public CalculatorBase {
  private:
   bool has_video_stream_ = false;
   bool has_model_matrix_stream_ = false;
-  bool has_mask_model_matrix_stream_ = false;
-  bool has_occlusion_mask_ = false;
 
   GlCalculatorHelper helper_;
   bool initialized_ = false;
-  GlTexture texture_;
-  GlTexture mask_texture_;
+  GlTexture robot_texture_, dino_texture_;
+  std::vector<TriangleMesh> robot_triangle_meshes_, dino_triangle_meshes_;
 
   GLuint renderbuffer_ = 0;
   bool depth_buffer_created_ = false;
@@ -139,14 +130,11 @@ class GlAnimationOverlayCalculator : public CalculatorBase {
   GLint perspective_matrix_uniform_ = -1;
   GLint model_matrix_uniform_ = -1;
 
-  std::vector<TriangleMesh> triangle_meshes_;
-  std::vector<TriangleMesh> mask_meshes_;
   Timestamp animation_start_time_;
   int frame_count_ = 0;
   float animation_speed_fps_;
 
   std::vector<ModelMatrix> current_model_matrices_;
-  std::vector<ModelMatrix> current_mask_model_matrices_;
 
   // Perspective matrix for rendering, to be applied to all model matrices
   // prior to passing through to the shader as a MVP matrix.  Initialized during
@@ -194,23 +182,24 @@ REGISTER_CALCULATOR(GlAnimationOverlayCalculator);
   if (cc->Inputs().HasTag("MODEL_MATRICES")) {
     cc->Inputs().Tag("MODEL_MATRICES").Set<TimedModelMatrixProtoList>();
   }
-  if (cc->Inputs().HasTag("MASK_MODEL_MATRICES")) {
-    cc->Inputs().Tag("MASK_MODEL_MATRICES").Set<TimedModelMatrixProtoList>();
+
+  if (cc->Inputs().HasTag("RENDER_DATA")) {
+    cc->Inputs()
+        .Tag("RENDER_DATA")
+        .Set<std::vector<int>>();
   }
 
-  cc->InputSidePackets().Tag("TEXTURE").Set<AssetTextureFormat>();
-  cc->InputSidePackets().Tag("ANIMATION_ASSET").Set<std::string>();
+  // All object asset and texture information
+  cc->InputSidePackets().Tag("ROBOT_TEXTURE").Set<AssetTextureFormat>();
+  cc->InputSidePackets().Tag("ROBOT_ASSET").Set<std::string>();
+
+  cc->InputSidePackets().Tag("DINO_TEXTURE").Set<AssetTextureFormat>();
+  cc->InputSidePackets().Tag("DINO_ASSET").Set<std::string>();
+
   if (cc->InputSidePackets().HasTag("CAMERA_PARAMETERS_PROTO_STRING")) {
     cc->InputSidePackets()
         .Tag("CAMERA_PARAMETERS_PROTO_STRING")
         .Set<std::string>();
-  }
-
-  if (cc->InputSidePackets().HasTag("MASK_TEXTURE")) {
-    cc->InputSidePackets().Tag("MASK_TEXTURE").Set<AssetTextureFormat>();
-  }
-  if (cc->InputSidePackets().HasTag("MASK_ASSET")) {
-    cc->InputSidePackets().Tag("MASK_ASSET").Set<std::string>();
   }
 
   return ::mediapipe::OkStatus();
@@ -351,8 +340,8 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
       break;
     }
 
-    triangle_meshes_.emplace_back();
-    TriangleMesh &triangle_mesh = triangle_meshes_.back();
+    robot_triangle_meshes_.emplace_back();
+    TriangleMesh &triangle_mesh = robot_triangle_meshes_.back();
 
     // Try to read in vertices (4-byte floats).
     triangle_mesh.vertices.reset(new float[lengths[0]]);
@@ -387,7 +376,7 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
   }
 
   LOG(INFO) << "Finished parsing " << frame_count_ << " animation frames.";
-  if (triangle_meshes_.empty()) {
+  if (robot_triangle_meshes_.empty()) {
     LOG(ERROR) << "No animation frames were parsed!  Erroring out calculator.";
     return false;
   }
@@ -440,45 +429,35 @@ void GlAnimationOverlayCalculator::ComputeAspectRatioAndFovFromCameraParameters(
   // See what streams we have.
   has_video_stream_ = cc->Inputs().HasTag("VIDEO");
   has_model_matrix_stream_ = cc->Inputs().HasTag("MODEL_MATRICES");
-  has_mask_model_matrix_stream_ = cc->Inputs().HasTag("MASK_MODEL_MATRICES");
 
-  // Try to load in the animation asset in a platform-specific manner.
-  const std::string &asset_name =
-      cc->InputSidePackets().Tag("ANIMATION_ASSET").Get<std::string>();
+  // Load in all object asset data
+  const std::string &robot_asset_name = cc->InputSidePackets().Tag("ROBOT_ASSET").Get<std::string>();
+  const std::string &dino_asset_name = cc->InputSidePackets().Tag("DINO_ASSET").Get<std::string>();
   bool loaded_animation = false;
-#if defined(__ANDROID__)
-  if (cc->InputSidePackets().HasTag("MASK_ASSET")) {
-    has_occlusion_mask_ = true;
-    const std::string &mask_asset_name =
-        cc->InputSidePackets().Tag("MASK_ASSET").Get<std::string>();
-    loaded_animation = LoadAnimationAndroid(mask_asset_name, &mask_meshes_);
+
+  #if defined(__ANDROID__)
+    loaded_animation = LoadAnimationAndroid(robot_asset_name, &robot_triangle_meshes_);
+    loaded_animation = LoadAnimationAndroid(dino_asset_name, &dino_triangle_meshes_);
+  #else
+    loaded_animation = LoadAnimation(robot_asset_name);
+    loaded_animation = LoadAnimation(dino_asset_name);
+  #endif
     if (!loaded_animation) {
-      LOG(ERROR) << "Failed to load mask asset.";
-      return ::mediapipe::UnknownError("Failed to load mask asset.");
+      LOG(ERROR) << "Failed to load animation asset.";
+      return ::mediapipe::UnknownError("Failed to load animation asset.");
     }
-  }
-  loaded_animation = LoadAnimationAndroid(asset_name, &triangle_meshes_);
-#else
-  loaded_animation = LoadAnimation(asset_name);
-#endif
-  if (!loaded_animation) {
-    LOG(ERROR) << "Failed to load animation asset.";
-    return ::mediapipe::UnknownError("Failed to load animation asset.");
-  }
 
   return helper_.RunInGlContext([this, &cc]() -> ::mediapipe::Status {
-    if (cc->InputSidePackets().HasTag("MASK_TEXTURE")) {
-      const auto &mask_texture =
-          cc->InputSidePackets().Tag("MASK_TEXTURE").Get<AssetTextureFormat>();
-      mask_texture_ = helper_.CreateSourceTexture(mask_texture);
-    }
 
-    // Load in our asset's texture data
-    const auto &input_texture =
-        cc->InputSidePackets().Tag("TEXTURE").Get<AssetTextureFormat>();
-    texture_ = helper_.CreateSourceTexture(input_texture);
-    VLOG(2) << "Input texture size: " << texture_.width() << ", "
-            << texture_.height() << std::endl;
+    // Load in all static texture data
+    const auto &input_robot_texture =
+        cc->InputSidePackets().Tag("ROBOT_TEXTURE").Get<AssetTextureFormat>();
+    robot_texture_ = helper_.CreateSourceTexture(input_robot_texture);
+
+    // Load in all static texture data
+    const auto &input_dino_texture =
+        cc->InputSidePackets().Tag("DINO_TEXTURE").Get<AssetTextureFormat>();
+    dino_texture_ = helper_.CreateSourceTexture(input_dino_texture);
 
     return ::mediapipe::OkStatus();
   });
@@ -529,14 +508,6 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       const TimedModelMatrixProtoList &model_matrices =
           cc->Inputs().Tag("MODEL_MATRICES").Get<TimedModelMatrixProtoList>();
       LoadModelMatrices(model_matrices, &current_model_matrices_);
-    }
-    if (has_mask_model_matrix_stream_ &&
-        !cc->Inputs().Tag("MASK_MODEL_MATRICES").IsEmpty()) {
-      const TimedModelMatrixProtoList &model_matrices =
-          cc->Inputs()
-              .Tag("MASK_MODEL_MATRICES")
-              .Get<TimedModelMatrixProtoList>();
-      LoadModelMatrices(model_matrices, &current_mask_model_matrices_);
     }
 
     // Arbitrary default width and height for output destination texture, in the
@@ -591,28 +562,33 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     }
     GLCHECK(glClear(GL_DEPTH_BUFFER_BIT));
 
-    if (has_occlusion_mask_) {
-      glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-      const TriangleMesh &mask_frame = mask_meshes_.front();
-      MP_RETURN_IF_ERROR(GlBind(mask_frame, mask_texture_));
-      // Draw objects using our latest model matrix stream packet.
-      for (const ModelMatrix &model_matrix : current_mask_model_matrices_) {
-        MP_RETURN_IF_ERROR(GlRender(mask_frame, model_matrix.get()));
-      }
-    }
-
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
     int frame_index = GetAnimationFrameIndex(cc->InputTimestamp());
-    const TriangleMesh &current_frame = triangle_meshes_[frame_index];
-    MP_RETURN_IF_ERROR(GlBind(current_frame, texture_));
+
+    // Define current frames for all animation assets
+    TriangleMesh &robot_current_frame = robot_triangle_meshes_[frame_index];
+    TriangleMesh &dino_current_frame = dino_triangle_meshes_[frame_index];
+
+    // Load the render data to map model matrix to texture and asset
+    const std::vector<int> render_ids = cc->Inputs().Tag("RENDER_DATA").Get<std::vector<int>>();
+
     if (has_model_matrix_stream_) {
-      // Draw objects using our latest model matrix stream packet.
+      int idx = 0;
       for (const ModelMatrix &model_matrix : current_model_matrices_) {
-        MP_RETURN_IF_ERROR(GlRender(current_frame, model_matrix.get()));
+        int render_id = render_ids[idx];
+        if(render_id == 0) { // robot
+          MP_RETURN_IF_ERROR(GlBind(robot_current_frame, robot_texture_));
+          MP_RETURN_IF_ERROR(GlRender(robot_current_frame, model_matrix.get()));
+        }
+        else if(render_id == 1) { // dino
+          MP_RETURN_IF_ERROR(GlBind(dino_current_frame, dino_texture_));
+          MP_RETURN_IF_ERROR(GlRender(dino_current_frame, model_matrix.get()));
+        }
+        idx++; // iterate to next render_id
       }
     } else {
-      // Just draw one object to a static model matrix.
-      MP_RETURN_IF_ERROR(GlRender(current_frame, kModelMatrix));
+      // Do nothing.
     }
 
     // Disable vertex attributes
@@ -624,7 +600,6 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
 
     // Unbind texture
     GLCHECK(glActiveTexture(GL_TEXTURE1));
-    GLCHECK(glBindTexture(texture_.target(), 0));
 
     // Unbind depth buffer
     GLCHECK(glBindRenderbuffer(GL_RENDERBUFFER, 0));
@@ -747,12 +722,6 @@ GlAnimationOverlayCalculator::~GlAnimationOverlayCalculator() {
     if (depth_buffer_created_) {
       GLCHECK(glDeleteRenderbuffers(1, &renderbuffer_));
       renderbuffer_ = 0;
-    }
-    if (texture_.width() > 0) {
-      texture_.Release();
-    }
-    if (mask_texture_.width() > 0) {
-      mask_texture_.Release();
     }
   });
 }

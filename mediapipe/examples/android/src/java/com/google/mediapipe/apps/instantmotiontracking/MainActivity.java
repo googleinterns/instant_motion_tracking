@@ -105,12 +105,18 @@ public class MainActivity extends AppCompatActivity {
   private float[] imuData = new float[3]; // [roll,pitch,yaw]
 
   // Assets for object rendering
-  private Bitmap objTexture = null;
-  private static final String OBJ_TEXTURE = "chair_texture.bmp";
-  private static final String OBJ_FILE = "chair.obj.uuu";
-  // Tags for the side packets of model texture and .obj.uuu
-  private static final String SIDE_PACKET_ASSET_TAG = "obj_asset_name";
-  private static final String SIDE_PACKET_TEXTURE_TAG = "obj_texture";
+  // All robot animation assets and tags
+  private Bitmap robotTexture = null;
+  private static final String ROBOT_TEXTURE = "robot_texture.bmp";
+  private static final String ROBOT_FILE = "robot.obj.uuu";
+  private static final String ROBOT_TEXTURE_TAG = "robot_texture";
+  private static final String ROBOT_ASSET_TAG = "robot_asset_name";
+  // All dino animation assets and tags
+  private Bitmap dinoTexture = null;
+  private static final String DINO_TEXTURE = "dino_texture.bmp";
+  private static final String DINO_FILE = "dino.obj.uuu";
+  private static final String DINO_TEXTURE_TAG = "dino_texture";
+  private static final String DINO_ASSET_TAG = "dino_asset_name";
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -146,8 +152,10 @@ public class MainActivity extends AppCompatActivity {
     prepareDemoAssets();
     AndroidPacketCreator packetCreator = processor.getPacketCreator();
     Map<String, Packet> inputSidePackets = new HashMap<>();
-    inputSidePackets.put(SIDE_PACKET_ASSET_TAG, packetCreator.createString(OBJ_FILE));
-    inputSidePackets.put(SIDE_PACKET_TEXTURE_TAG, packetCreator.createRgbaImageFrame(objTexture));
+    inputSidePackets.put(ROBOT_TEXTURE_TAG, packetCreator.createRgbaImageFrame(robotTexture));
+    inputSidePackets.put(ROBOT_ASSET_TAG, packetCreator.createString(ROBOT_FILE));
+    inputSidePackets.put(DINO_TEXTURE_TAG, packetCreator.createRgbaImageFrame(dinoTexture));
+    inputSidePackets.put(DINO_ASSET_TAG, packetCreator.createString(DINO_FILE));
     processor.setInputSidePackets(inputSidePackets);
 
     // Add frame listener to PacketManagement system
@@ -289,9 +297,19 @@ public class MainActivity extends AppCompatActivity {
                 refreshUI();
             }
         });
+        // Change sticker to next possible render
+        ImageButton loopRender = new ImageButton(this);
+        setUIControlButtonDesign(loopRender, R.drawable.baseline_loop_24);
+        loopRender.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                currentSticker.loopAssetID();
+                refreshUI();
+            }
+        });
 
         buttonLayout.addView(deleteSticker);
         buttonLayout.addView(goBack);
+        buttonLayout.addView(loopRender);
     }
     else {
         buttonLayout.removeAllViews();
@@ -304,7 +322,13 @@ public class MainActivity extends AppCompatActivity {
                     refreshUI();
                 }
             });
-            setStickerButtonDesign(stickerButton, R.drawable.chair_preview);
+            if(sticker.getRenderAssetID() == 0) { // robot
+              setStickerButtonDesign(stickerButton, R.drawable.robot);
+            }
+            else if(sticker.getRenderAssetID() == 1) { // dino
+              setStickerButtonDesign(stickerButton, R.drawable.dino);
+            }
+            
             buttonLayout.addView(stickerButton);
         }
         ImageButton addSticker = new ImageButton(this);
@@ -428,8 +452,17 @@ public class MainActivity extends AppCompatActivity {
     decodeOptions.inPremultiplied = false;
 
     try {
-      InputStream inputStream = getAssets().open(OBJ_TEXTURE);
-      objTexture = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
+      InputStream inputStream = getAssets().open(ROBOT_TEXTURE);
+      robotTexture = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
+      inputStream.close();
+    } catch (Exception e) {
+      Log.e(TAG, "Error parsing object texture; error: " + e);
+      throw new IllegalStateException(e);
+    }
+
+    try {
+      InputStream inputStream = getAssets().open(DINO_TEXTURE);
+      dinoTexture = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
       inputStream.close();
     } catch (Exception e) {
       Log.e(TAG, "Error parsing object texture; error: " + e);
@@ -440,6 +473,7 @@ public class MainActivity extends AppCompatActivity {
   private class MediaPipePacketManager implements FrameProcessor.OnWillAddFrameListener {
     @Override
     public void onWillAddFrame(long timestamp) {
+      // All sticker information and IMU data
       Packet stickerDataPacket = processor.getPacketCreator().createString(Sticker.stickerArrayListToRawData(stickerList));
       Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(imuData);
       processor.getGraph().addConsumablePacketToInputStream("sticker_data_string", stickerDataPacket, timestamp);
