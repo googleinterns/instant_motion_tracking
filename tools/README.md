@@ -1,6 +1,6 @@
 # Using the GL-Tools Suite
 
-This document covers the use of reformatting and object simplification tools in order to develop render files that can be used in the instantmotiontracking project via the gl_animation_overlay_calculator.
+This document covers the use of reformatting and object simplification tools in order to develop render files that can be used in the InstantMotionTracking project via the gl_animation_overlay_calculator.
 
 ## OpenGL with InstantMotionTracking
 
