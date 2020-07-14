@@ -16,7 +16,7 @@
 
 # Images in/out of graph with sticker data and IMU information from device
 input_stream: "input_video"
-input_stream: "sticker_data_string"
+input_stream: "sticker_proto_string"
 input_stream: "imu_data"
 output_stream: "output_video"
 
@@ -24,7 +24,7 @@ output_stream: "output_video"
 # initial anchors.
 node {
   calculator: "StickerManagerCalculator"
-  input_stream: "STRING:sticker_data_string"
+  input_stream: "PROTO:sticker_proto_string"
   output_stream: "ANCHORS:initial_anchor_data"
   output_stream: "USER_ROTATIONS:user_rotation_data"
   output_stream: "USER_SCALINGS:user_scaling_data"

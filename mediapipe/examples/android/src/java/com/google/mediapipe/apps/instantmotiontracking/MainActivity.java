@@ -41,6 +41,7 @@ import android.widget.ImageView;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.constraintlayout.widget.ConstraintLayout;
 
+import com.google.protobuf.MessageLite;
 import com.google.mediapipe.components.CameraHelper;
 import com.google.mediapipe.components.CameraXPreviewHelper;
 import com.google.mediapipe.components.ExternalTextureConverter;
@@ -87,7 +88,7 @@ public class MainActivity extends AppCompatActivity {
   // Contains dynamic layout of sticker data controller
   private LinearLayout buttonLayout;
 
-  private ArrayList<Sticker> stickerList;
+  private ArrayList<Sticker> stickerArrayList;
   private Sticker currentSticker; // Sticker being edited
 
   // Define parameters for 'reactivity' of object
@@ -169,7 +170,7 @@ public class MainActivity extends AppCompatActivity {
     processor.setInputSidePackets(devicePropertiesSidePackets);
 
     // Begin with 0 stickers in dataset
-    stickerList = new ArrayList<Sticker>();
+    stickerArrayList = new ArrayList<Sticker>();
     currentSticker = null;
 
     // TODO: Change to use ROTATION_VECTOR or non-deprecated IMU method
@@ -282,7 +283,7 @@ public class MainActivity extends AppCompatActivity {
         deleteSticker.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 if(currentSticker != null) {
-                    stickerList.remove(currentSticker);
+                    stickerArrayList.remove(currentSticker);
                     currentSticker = null;
                     refreshUI();
                 }
@@ -314,7 +315,7 @@ public class MainActivity extends AppCompatActivity {
     else {
         buttonLayout.removeAllViews();
         // Display stickers
-        for(final Sticker sticker : stickerList) {
+        for(final Sticker sticker : stickerArrayList) {
             final ImageButton stickerButton = new ImageButton(this);
             stickerButton.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
@@ -328,14 +329,14 @@ public class MainActivity extends AppCompatActivity {
             else if(sticker.getRenderAssetID() == 1) { // dino
               setStickerButtonDesign(stickerButton, R.drawable.dino);
             }
-            
+
             buttonLayout.addView(stickerButton);
         }
         ImageButton addSticker = new ImageButton(this);
         setUIControlButtonDesign(addSticker, R.drawable.baseline_add_24);
         addSticker.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                stickerList.add(new Sticker());
+                stickerArrayList.add(new Sticker());
                 refreshUI();
             }
         });
@@ -473,12 +474,12 @@ public class MainActivity extends AppCompatActivity {
   private class MediaPipePacketManager implements FrameProcessor.OnWillAddFrameListener {
     @Override
     public void onWillAddFrame(long timestamp) {
-      // All sticker information and IMU data
-      Packet stickerDataPacket = processor.getPacketCreator().createString(Sticker.stickerArrayListToRawData(stickerList));
+      // Communicate sticker data protobuffer and IMU sensory data to MediaPipe graph
+      Packet stickerProtoDataPacket = processor.getPacketCreator().createSerializedProto(Sticker.getMessageLiteData(stickerArrayList));
       Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(imuData);
-      processor.getGraph().addConsumablePacketToInputStream("sticker_data_string", stickerDataPacket, timestamp);
+      processor.getGraph().addConsumablePacketToInputStream("sticker_proto_string", stickerProtoDataPacket, timestamp);
       processor.getGraph().addConsumablePacketToInputStream("imu_data", imuDataPacket, timestamp);
-      stickerDataPacket.release();
+      stickerProtoDataPacket.release();
       imuDataPacket.release();
     }
   }

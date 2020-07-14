@@ -19,6 +19,7 @@ android_library(
         "//third_party:opencv",
         "@maven//:androidx_concurrent_concurrent_futures",
         "@maven//:com_google_guava_guava",
+        "@com_google_protobuf//:protobuf_java",
     ],
 )
 

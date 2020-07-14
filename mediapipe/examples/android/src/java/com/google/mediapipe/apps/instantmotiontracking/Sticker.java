@@ -15,6 +15,7 @@
 package com.google.mediapipe.apps.instantmotiontracking;
 
 import java.util.ArrayList;
+import com.google.protobuf.*;
 
 // Stickers represent a unique object to render and manipulate in an AR scene.
 // A sticker has a sticker_id (a unique integer identifying a sticker object to
@@ -100,35 +101,30 @@ public class Sticker {
     this.userScalingFactor = scaling;
   }
 
+  /** Get current scale factor **/
   public float getScaleFactor() {
     return this.userScalingFactor;
   }
 
   /**
-   * This method converts an ArrayList of stickers to a data string that can be passed to the
-   * Mediapipe graph.
+   * This method converts an ArrayList of stickers to a MessageLite object which
+   * can be passed directly to the MediaPipe graph.
    *
    * @param stickerList ArrayList of Sticker objects to convert to data string
-   * @return String of all sticker data (Managed by Android end)
+   * @return MessageLite protobuffer of all sticker data
    */
-  public static String stickerArrayListToRawData(ArrayList<Sticker> stickerList) {
-    String output = "";
-    for (Sticker sticker : stickerList) {
-      output +=
-          ("\n(sticker_id:"
-              + sticker.getStickerID()
-              + ",\nsticker_anchor_x:"
-              + sticker.getAnchor()[0]
-              + ",\nsticker_anchor_y:"
-              + sticker.getAnchor()[1]
-              + ",\nsticker_rotation:"
-              + sticker.getRotation()
-              + ",\nsticker_scaling:"
-              + sticker.getScaleFactor()
-              + ",\nsticker_render_id:"
-              + sticker.renderID
-              + ")");
+  public static MessageLite getMessageLiteData(ArrayList<Sticker> stickerArrayList) {
+    StickerBuffer.StickerRoll.Builder stickerRollBuilder = StickerBuffer.StickerRoll.newBuilder();
+    for (final Sticker sticker : stickerArrayList) {
+      StickerBuffer.Sticker protoSticker = StickerBuffer.Sticker.newBuilder()
+      .setId(sticker.getStickerID())
+      .setX(sticker.getAnchor()[0])
+      .setY(sticker.getAnchor()[1])
+      .setRotation(sticker.getRotation())
+      .setScale(sticker.getScaleFactor())
+      .setRenderID(sticker.renderID).build();
+      stickerRollBuilder.addSticker(protoSticker);
     }
-    return output;
+    return stickerRollBuilder.build();
   }
 }

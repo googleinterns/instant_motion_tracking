@@ -16,23 +16,23 @@
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/port/ret_check.h"
 #include "mediapipe/graphs/instantmotiontracking/calculators/transformations.h"
+#include "mediapipe/graphs/instantmotiontracking/calculators/sticker_buffer.pb.h"
 
 namespace mediapipe {
 
 constexpr char kStringTag[] = "STRING";
+constexpr char kProtoDataString[] = "PROTO";
 constexpr char kAnchorsTag[] = "ANCHORS";
 constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
 constexpr char kUserScalingsTag[] = "USER_SCALINGS";
 constexpr char kRenderDescriptorsTag[] = "RENDER_DATA";
 
-// This calculator takes in the sticker data from the application as a string
-// in a sequence of the following format:
-// "(sticker_id:1,sticker_anchor_x:1.44,sticker_anchor_y:0.0,
-// sticker_rotation:0.0,sticker_scaling:0.0,sticker_render_id:0,
-// should_reset_anchor:true)(sticker_id:2.............."
+// This calculator takes in the sticker protobuffer data and parses each individual
+// sticker object into anchors, user rotations and scalings, in addition to basic
+// render data represented in integer form.
 //
 // Input:
-//  STRING - String of sticker data in appropriate parse format [REQUIRED]
+//  PROTO - String of sticker data in appropriate protobuf format [REQUIRED]
 // Output:
 //  ANCHORS - Anchors with initial normalized X,Y coordinates [REQUIRED]
 //  USER_ROTATIONS - UserRotations with radians of rotation from user [REQUIRED]
@@ -42,7 +42,7 @@ constexpr char kRenderDescriptorsTag[] = "RENDER_DATA";
 // Example config:
 // node {
 //   calculator: "StickerManagerCalculator"
-//   input_stream: "STRING:sticker_data_string"
+//   input_stream: "PROTO:sticker_proto_string"
 //   output_stream: "ANCHORS:initial_anchor_data"
 //   output_stream: "USER_ROTATIONS:user_rotation_data"
 //   output_stream: "USER_SCALINGS:user_scaling_data"
@@ -52,14 +52,14 @@ constexpr char kRenderDescriptorsTag[] = "RENDER_DATA";
 class StickerManagerCalculator : public CalculatorBase {
  public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
-    RET_CHECK(cc->Inputs().HasTag(kStringTag));
+    RET_CHECK(cc->Inputs().HasTag(kProtoDataString));
     RET_CHECK(cc->Outputs().HasTag(kAnchorsTag)
       && cc->Outputs().HasTag(kUserRotationsTag)
       && cc->Outputs().HasTag(kUserScalingsTag)
       && cc->Outputs().HasTag(kRenderDescriptorsTag));
 
-    if (cc->Inputs().HasTag(kStringTag)) {
-      cc->Inputs().Tag(kStringTag).Set<std::string>();
+    if (cc->Inputs().HasTag(kProtoDataString)) {
+      cc->Inputs().Tag(kProtoDataString).Set<std::string>();
     }
     if (cc->Outputs().HasTag(kAnchorsTag)) {
       cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
@@ -85,60 +85,42 @@ class StickerManagerCalculator : public CalculatorBase {
   }
 
   ::mediapipe::Status Process(CalculatorContext* cc) final {
-    std::string sticker_data_string =
-        cc->Inputs().Tag(kStringTag).Get<std::string>();
+    std::string sticker_proto_string =
+      cc->Inputs().Tag(kProtoDataString).Get<std::string>();
 
     std::vector<Anchor> initial_anchor_data;
     std::vector<UserRotation> user_rotation_data;
     std::vector<UserScaling> user_scaling_data;
-    std::vector<int> render_descriptor_data;
+    std::vector<int> render_data;
 
-    while (sticker_data_string.find(")") != -1) {
+    instantmotiontracking::StickerRoll sticker_roll;
+    bool parse_success = sticker_roll.ParseFromString(sticker_proto_string);
+
+    // Ensure parsing was a success
+    RET_CHECK(parse_success) << "Error parsing sticker protobuf data";
+
+    for (int i = 0; i < sticker_roll.sticker().size(); i++) {
+      // Declare empty structures for sticker data
       Anchor initial_anchor;
       UserRotation user_rotation;
       UserScaling user_scaling;
-      std::string stickerString = sticker_data_string.substr(
-          sticker_data_string.find("(") + 1, sticker_data_string.find(")"));
-
-      // Associate all data with a single sticker ID value
-      stickerString = findPastKey("sticker_id:", stickerString);
-      int sticker_id =
-          std::stoi(stickerString.substr(0, stickerString.find(",")));
-      initial_anchor.sticker_id = sticker_id;
-      user_rotation.sticker_id = sticker_id;
-      user_scaling.sticker_id = sticker_id;
-      
-      // Set the initial anchor data
-      stickerString = findPastKey("sticker_anchor_x:", stickerString);
-      initial_anchor.x =
-          std::stof(stickerString.substr(0, stickerString.find(",")));
-      stickerString = findPastKey("sticker_anchor_y:", stickerString);
-      initial_anchor.y =
-          std::stof(stickerString.substr(0, stickerString.find(",")));
-      initial_anchor.z = 1.0;  // default normalized z-value
-
-      // Set user rotation data
-      stickerString = findPastKey("sticker_rotation:", stickerString);
-      user_rotation.radians =
-          std::stof(stickerString.substr(0, stickerString.find(",")));
-
-      // Set user scaling data
-      stickerString = findPastKey("sticker_scaling:", stickerString);
-      user_scaling.scaling_increment =
-          std::stof(stickerString.substr(0, stickerString.find(",")));
-
-      // Set render data
-      stickerString = findPastKey("sticker_render_id:", stickerString);
-      int render_object_id =
-          std::stoi(stickerString.substr(0, stickerString.length()));
-      sticker_data_string = sticker_data_string.substr(
-          sticker_data_string.find(")") + 1, sticker_data_string.length());
-
-      // Add all data parsed sticker data to appropriate vector
+      // Get individual Sticker object as defined by Protobuffer
+      instantmotiontracking::Sticker sticker = sticker_roll.sticker(i);
+      // Set individual data structure ids to associate with this sticker
+      initial_anchor.sticker_id = sticker.id();
+      user_rotation.sticker_id = sticker.id();
+      user_scaling.sticker_id = sticker.id();
+      initial_anchor.x = sticker.x();
+      initial_anchor.y = sticker.y();
+      initial_anchor.z = 1.0; // default to 1.0 in normalized 3d space
+      user_rotation.rotation_radians = sticker.rotation();
+      user_scaling.scale_factor = sticker.scale();
+      float render_id = sticker.renderid();
+      // Set all vector data with sticker attributes
       initial_anchor_data.emplace_back(initial_anchor);
       user_rotation_data.emplace_back(user_rotation);
       user_scaling_data.emplace_back(user_scaling);
-      render_descriptor_data.emplace_back(render_object_id);
+      render_data.emplace_back(render_id);
     }
 
     if (cc->Outputs().HasTag(kAnchorsTag)) {
@@ -163,7 +145,7 @@ class StickerManagerCalculator : public CalculatorBase {
       cc->Outputs()
           .Tag(kRenderDescriptorsTag)
           .AddPacket(
-              MakePacket<std::vector<int>>(render_descriptor_data)
+              MakePacket<std::vector<int>>(render_data)
                   .At(cc->InputTimestamp()));
     }
 
@@ -172,12 +154,6 @@ class StickerManagerCalculator : public CalculatorBase {
 
   ::mediapipe::Status Close(CalculatorContext* cc) final {
     return ::mediapipe::OkStatus();
-  }
-
-  // Returns a string of every character after 'key'
-  std::string findPastKey(std::string key, std::string original) {
-    return original.substr(original.find(key) + key.length(),
-                           original.length());
   }
 };
 

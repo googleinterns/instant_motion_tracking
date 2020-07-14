@@ -21,14 +21,30 @@ package(default_visibility = ["//visibility:public"])
 exports_files(["LICENSE"])
 
 cc_library(
+  name = "sticker_buffer",
+  srcs = [
+      "sticker_buffer.pb.cc",
+  ],
+  hdrs = [
+      "sticker_buffer.pb.h",
+  ],
+  deps = [
+      "@com_google_protobuf//:protobuf",
+  ],
+)
+
+cc_library(
     name = "transformations",
-    srcs = ["transformations.h"],
+    srcs = [
+        "transformations.h"
+    ],
 )
 
 cc_library(
     name = "sticker_manager_calculator",
     srcs = ["sticker_manager_calculator.cc"],
     deps = [
+        ":sticker_buffer",
         ":transformations",
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework:timestamp",

@@ -1,0 +1,18 @@
+syntax = "proto2";
+
+package instantmotiontracking;
+
+option java_package = "com.google.mediapipe.apps.instantmotiontracking";
+
+message Sticker {
+  required int32 id = 1;
+  required float x = 2;
+  required float y = 3;
+  required float rotation = 4;
+  required float scale = 5;
+  required int32 renderID = 6;
+}
+
+message StickerRoll {
+  repeated Sticker sticker = 1;
+}

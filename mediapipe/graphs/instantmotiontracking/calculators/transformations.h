@@ -14,13 +14,13 @@
 
 // Radians by which to rotate the object (Provided by UI input)
 typedef struct UserRotation {
-   float radians;
+   float rotation_radians;
    int sticker_id;
 };
 
-// A scaling increment provided by the UI application end
+// Scaling factor provided by the UI application end
 typedef struct UserScaling {
-   float scaling_increment;
+   float scale_factor;
    int sticker_id;
 };
 
@@ -29,21 +29,5 @@ typedef struct Anchor {
    float x; // [0.0-1.0]
    float y; // [0.0-1.0]
    float z; // Centered around 1.0 [current_scale = z * initial_scale]
-   int sticker_id;
-};
-
-// Representative of a translation transformation in OpenGL space
-typedef struct Translation {
-   float x;
-   float y;
-   float z;
-   int sticker_id;
-};
-
-// Representative of a rotation transformation in OpenGL space
-typedef struct Rotation {
-   float x_radians;
-   float y_radians;
-   float z_radians;
    int sticker_id;
 };

@@ -93,7 +93,7 @@ class MatricesManagerCalculator : public CalculatorBase {
     const float GetUserScaler(const std::vector<UserScaling> scalings, const int sticker_id) {
       for (const UserScaling &user_scaling : scalings) {
         if (user_scaling.sticker_id == sticker_id) {
-          return user_scaling.scaling_increment;
+          return user_scaling.scale_factor;
         }
       }
     }
@@ -101,7 +101,7 @@ class MatricesManagerCalculator : public CalculatorBase {
     const float GetUserRotation(const std::vector<UserRotation> rotations, const int sticker_id) {
       for (const UserRotation &rotation : rotations) {
         if (rotation.sticker_id == sticker_id) {
-          return rotation.radians;
+          return rotation.rotation_radians;
         }
       }
     }
