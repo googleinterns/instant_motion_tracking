@@ -36,8 +36,8 @@ namespace {
   using DiagonalMatrix3f = Eigen::DiagonalMatrix<float, 3>;
   constexpr char kAnchorsTag[] = "ANCHORS";
   constexpr char kIMUDataTag[] = "IMU_DATA";
-  constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
-  constexpr char kUserScalingsTag[] = "USER_SCALINGS";
+  constexpr char kUserTransformsTag[] = "USER_TRANSFORMS";
+  constexpr char kRendersTag[] = "RENDER_DATA";
   constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
   constexpr char kFOVSidePacketTag[] = "FOV";
   constexpr char kAspectRatioSidePacketTag[] = "ASPECT_RATIO";
@@ -59,9 +59,7 @@ namespace {
 // Input:
 //  ANCHORS - Anchor data with normalized x,y,z coordinates [REQUIRED]
 //  IMU_DATA - float[3] of [roll, pitch, yaw] of device [REQUIRED]
-//  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
-//  TRANSLATION_DATA - All stickers final translation data (vector of
-//  Translation objects) [REQUIRED]
+//  USER_TRANSFORMS - User transformation data [REQUIRED]
 // Output:
 //  MODEL_MATRICES - TimedModelMatrixProtoList of all objects to render [REQUIRED]
 //
@@ -70,8 +68,7 @@ namespace {
 //  calculator: "MatricesManagerCalculator"
 //  input_stream: "ANCHORS:tracked_scaled_anchor_data"
 //  input_stream: "IMU_DATA:imu_data"
-//  input_stream: "USER_ROTATIONS:user_rotation_data"
-//  input_stream: "TRANSLATION_DATA:final_translation_data"
+//  input_stream: "USER_TRANSFORMS:user_transform_data"
 //  output_stream: "MODEL_MATRICES:model_matrices"
 // }
 
@@ -81,28 +78,32 @@ class MatricesManagerCalculator : public CalculatorBase {
     ::mediapipe::Status Open(CalculatorContext* cc) override;
     ::mediapipe::Status Process(CalculatorContext* cc) override;
   private:
-    const DiagonalMatrix3f GenerateUserScalingMatrix(const float scale_factor);
+    const DiagonalMatrix3f GenerateScalingMatrix(const float scale_factor);
     const Matrix3f GenerateUserRotationMatrix(const float rotation_radians);
     const Matrix4fCM GenerateEigenModelMatrix(const Vector3f translation_vector,
       const Matrix3f rotation_submatrix);
     const Vector3f GenerateAnchorVector(const Anchor tracked_anchor);
     const Matrix3f GenerateIMURotationSubmatrix(const float yaw, const float pitch, const float roll);
 
-    // Returns a user scaling increment associated with the sticker_id
     // TODO: Adjust lookup function if total number of stickers is uncapped to improve performance
-    const float GetUserScaler(const std::vector<UserScaling> scalings, const int sticker_id) {
-      for (const UserScaling &user_scaling : scalings) {
-        if (user_scaling.sticker_id == sticker_id) {
-          return user_scaling.scale_factor;
+    // Returns a user transformation structure associated with the sticker_id
+    const UserTransform GetUserTransformations(const std::vector<UserTransform> user_transform_data, const int sticker_id) {
+      for (const UserTransform &user_transform : user_transform_data) {
+        if (user_transform.sticker_id == sticker_id) {
+          return user_transform;
         }
       }
     }
-    // Returns a user rotation in radians associated with the sticker_id
-    const float GetUserRotation(const std::vector<UserRotation> rotations, const int sticker_id) {
-      for (const UserRotation &rotation : rotations) {
-        if (rotation.sticker_id == sticker_id) {
-          return rotation.rotation_radians;
-        }
+
+    // This returns a scale factor by which to alter the projection matrix for
+    // the specified render id in order to ensure all objects render at a similar
+    // size in the view screen upon initial placement
+    const float GetDefaultRenderScale(const int render_id) {
+      if(render_id == 0) { // Robot
+        return 5.0;
+      }
+      else if(render_id == 1) { // Dino
+        return 0.75;
       }
     }
 };
@@ -113,8 +114,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     CalculatorContract* cc) {
   RET_CHECK(cc->Inputs().HasTag(kAnchorsTag)
     && cc->Inputs().HasTag(kIMUDataTag)
-    && cc->Inputs().HasTag(kUserRotationsTag)
-    && cc->Inputs().HasTag(kUserScalingsTag)
+    && cc->Inputs().HasTag(kUserTransformsTag)
     && cc->InputSidePackets().HasTag(kFOVSidePacketTag)
     && cc->InputSidePackets().HasTag(kAspectRatioSidePacketTag));
   RET_CHECK(cc->Outputs().HasTag(kModelMatricesTag));
@@ -125,11 +125,11 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   if (cc->Inputs().HasTag(kIMUDataTag)) {
     cc->Inputs().Tag(kIMUDataTag).Set<float[]>();
   }
-  if (cc->Inputs().HasTag(kUserScalingsTag)) {
-      cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
+  if (cc->Inputs().HasTag(kUserTransformsTag)) {
+      cc->Inputs().Tag(kUserTransformsTag).Set<std::vector<UserTransform>>();
   }
-  if (cc->Inputs().HasTag(kUserRotationsTag)) {
-    cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
+  if (cc->Inputs().HasTag(kRendersTag)) {
+    cc->Inputs().Tag(kRendersTag).Set<std::vector<int>>();
   }
   if (cc->Outputs().HasTag(kModelMatricesTag)) {
     cc->Outputs().Tag(kModelMatricesTag).Set<TimedModelMatrixProtoList>();
@@ -154,16 +154,16 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   TimedModelMatrixProtoList* model_matrix_list = model_matrices.get();
   model_matrix_list->clear_model_matrix();
 
-  const std::vector<UserRotation> user_rotation_data =
-      cc->Inputs().Tag(kUserRotationsTag).Get<std::vector<UserRotation>>();
-
-  const std::vector<UserScaling> user_scaling_data =
-        cc->Inputs().Tag(kUserScalingsTag).Get<std::vector<UserScaling>>();
-
   const std::vector<Anchor> translation_data =
       cc->Inputs()
           .Tag(kAnchorsTag)
           .Get<std::vector<Anchor>>();
+
+  const std::vector<UserTransform> user_transform_data =
+      cc->Inputs().Tag(kUserTransformsTag).Get<std::vector<UserTransform>>();
+
+  const std::vector<int> render_data =
+      cc->Inputs().Tag(kRendersTag).Get<std::vector<int>>();
 
   // Device IMU Data definitions
   const float yaw = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[0];
@@ -172,6 +172,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   // We can pre-generate the IMU submatrix as this remains unchanged for all objects
   const Matrix3f imu_rotation_submatrix = GenerateIMURotationSubmatrix(yaw, pitch, roll);
 
+  int render_idx = 0; // Index used to iterate through the sequential render_data
   for (const Anchor &anchor : translation_data) {
     const int id = anchor.sticker_id;
 
@@ -180,23 +181,25 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     model_matrix->set_id(id);
 
     // The user transformation data associate with this sticker must be defined
-    const float rotation = GetUserRotation(user_rotation_data, id);
-    const float scaler = GetUserScaler(user_scaling_data, id);
+    const UserTransform user_transform = GetUserTransformations(user_transform_data, id);
+    // A matrix representative of a user's sticker rotation transformation can be created
+    const Matrix3f user_rotation_submatrix = GenerateUserRotationMatrix(user_transform.rotation_radians);
+    // Likewise, a diagonal representative of a user's sticker scaling can be created
+    const DiagonalMatrix3f user_scaling_diagonal = GenerateScalingMatrix(user_transform.scale_factor);
+    // We can then generate a submatrix of the IMU data with all user transformations applied
+    const Matrix3f rotation_submatrix = user_scaling_diagonal * (imu_rotation_submatrix *
+        user_rotation_submatrix);
 
-    // A vector representative of a user's sticker rotation transformation can be created
-    const Matrix3f user_rotation_submatrix = GenerateUserRotationMatrix(rotation);
-    // The user transformation data can be concatenated into a final rotation submatrix with the
-    // device IMU rotational data
-    const Matrix3f rotation_submatrix = imu_rotation_submatrix * user_rotation_submatrix;
-
-    // Next, the submatrix representative of the user's scaling transformation must be generated
-    const DiagonalMatrix3f user_scaling_submatrix = GenerateUserScalingMatrix(scaler);
+    // We can also generate the initial scaling diagonal based on the preset scale factor for this
+    // sticker's render id
+    const DiagonalMatrix3f render_scaling_diagonal = GenerateScalingMatrix(GetDefaultRenderScale(render_data[render_idx++]));
 
     // A vector representative of the translation of the object in OpenGL coordinate space must be generated
     const Vector3f translation_vector = GenerateAnchorVector(anchor);
 
     // Concatenate all model matrix data
-    const Matrix4fCM final_model_matrix = GenerateEigenModelMatrix(translation_vector, user_scaling_submatrix * rotation_submatrix);
+    const Matrix4fCM final_model_matrix = GenerateEigenModelMatrix(translation_vector,
+        render_scaling_diagonal * rotation_submatrix);
 
     // The generated model matrix must be mapped to TimedModelMatrixProto (col-wise)
     for (int x = 0; x < final_model_matrix.rows(); ++x) {
@@ -227,7 +230,7 @@ const Matrix3f MatricesManagerCalculator::GenerateUserRotationMatrix(const float
 }
 
 // Using a specified scale factor, generate a scaling matrix for use with base rotation submatrix
-const DiagonalMatrix3f MatricesManagerCalculator::GenerateUserScalingMatrix(const float scale_factor) {
+const DiagonalMatrix3f MatricesManagerCalculator::GenerateScalingMatrix(const float scale_factor) {
   DiagonalMatrix3f scaling_matrix(scale_factor, scale_factor, scale_factor);
   return scaling_matrix;
 }

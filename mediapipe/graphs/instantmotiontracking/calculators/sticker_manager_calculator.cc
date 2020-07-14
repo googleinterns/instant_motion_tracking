@@ -20,11 +20,9 @@
 
 namespace mediapipe {
 
-constexpr char kStringTag[] = "STRING";
 constexpr char kProtoDataString[] = "PROTO";
 constexpr char kAnchorsTag[] = "ANCHORS";
-constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
-constexpr char kUserScalingsTag[] = "USER_SCALINGS";
+constexpr char kUserTransformsTag[] = "USER_TRANSFORMS";
 constexpr char kRenderDescriptorsTag[] = "RENDER_DATA";
 
 // This calculator takes in the sticker protobuffer data and parses each individual
@@ -35,8 +33,7 @@ constexpr char kRenderDescriptorsTag[] = "RENDER_DATA";
 //  PROTO - String of sticker data in appropriate protobuf format [REQUIRED]
 // Output:
 //  ANCHORS - Anchors with initial normalized X,Y coordinates [REQUIRED]
-//  USER_ROTATIONS - UserRotations with radians of rotation from user [REQUIRED]
-//  USER_SCALINGS - UserScalings with increment of scaling from user [REQUIRED]
+//  USER_TRANSFORMS - UserTransforms with sticker rotation and scale factor from user [REQUIRED]
 //  RENDER_DATA - Descriptors of which objects/animations to render for stickers [REQUIRED]
 //
 // Example config:
@@ -44,8 +41,7 @@ constexpr char kRenderDescriptorsTag[] = "RENDER_DATA";
 //   calculator: "StickerManagerCalculator"
 //   input_stream: "PROTO:sticker_proto_string"
 //   output_stream: "ANCHORS:initial_anchor_data"
-//   output_stream: "USER_ROTATIONS:user_rotation_data"
-//   output_stream: "USER_SCALINGS:user_scaling_data"
+//   output_stream: "USER_TRANSFORMS:user_transform_data"
 //   output_stream: "RENDER_DATA:sticker_render_data"
 // }
 
@@ -54,8 +50,7 @@ class StickerManagerCalculator : public CalculatorBase {
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
     RET_CHECK(cc->Inputs().HasTag(kProtoDataString));
     RET_CHECK(cc->Outputs().HasTag(kAnchorsTag)
-      && cc->Outputs().HasTag(kUserRotationsTag)
-      && cc->Outputs().HasTag(kUserScalingsTag)
+      && cc->Outputs().HasTag(kUserTransformsTag)
       && cc->Outputs().HasTag(kRenderDescriptorsTag));
 
     if (cc->Inputs().HasTag(kProtoDataString)) {
@@ -64,11 +59,8 @@ class StickerManagerCalculator : public CalculatorBase {
     if (cc->Outputs().HasTag(kAnchorsTag)) {
       cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
     }
-    if (cc->Outputs().HasTag(kUserRotationsTag)) {
-      cc->Outputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
-    }
-    if (cc->Outputs().HasTag(kUserScalingsTag)) {
-      cc->Outputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
+    if (cc->Outputs().HasTag(kUserTransformsTag)) {
+      cc->Outputs().Tag(kUserTransformsTag).Set<std::vector<UserTransform>>();
     }
     if (cc->Outputs().HasTag(kRenderDescriptorsTag)) {
       cc->Outputs()
@@ -89,8 +81,7 @@ class StickerManagerCalculator : public CalculatorBase {
       cc->Inputs().Tag(kProtoDataString).Get<std::string>();
 
     std::vector<Anchor> initial_anchor_data;
-    std::vector<UserRotation> user_rotation_data;
-    std::vector<UserScaling> user_scaling_data;
+    std::vector<UserTransform> user_transform_data;
     std::vector<int> render_data;
 
     instantmotiontracking::StickerRoll sticker_roll;
@@ -102,24 +93,21 @@ class StickerManagerCalculator : public CalculatorBase {
     for (int i = 0; i < sticker_roll.sticker().size(); i++) {
       // Declare empty structures for sticker data
       Anchor initial_anchor;
-      UserRotation user_rotation;
-      UserScaling user_scaling;
+      UserTransform user_transform;
       // Get individual Sticker object as defined by Protobuffer
       instantmotiontracking::Sticker sticker = sticker_roll.sticker(i);
       // Set individual data structure ids to associate with this sticker
       initial_anchor.sticker_id = sticker.id();
-      user_rotation.sticker_id = sticker.id();
-      user_scaling.sticker_id = sticker.id();
+      user_transform.sticker_id = sticker.id();
       initial_anchor.x = sticker.x();
       initial_anchor.y = sticker.y();
       initial_anchor.z = 1.0; // default to 1.0 in normalized 3d space
-      user_rotation.rotation_radians = sticker.rotation();
-      user_scaling.scale_factor = sticker.scale();
+      user_transform.rotation_radians = sticker.rotation();
+      user_transform.scale_factor = sticker.scale();
       float render_id = sticker.renderid();
       // Set all vector data with sticker attributes
       initial_anchor_data.emplace_back(initial_anchor);
-      user_rotation_data.emplace_back(user_rotation);
-      user_scaling_data.emplace_back(user_scaling);
+      user_transform_data.emplace_back(user_transform);
       render_data.emplace_back(render_id);
     }
 
@@ -129,16 +117,10 @@ class StickerManagerCalculator : public CalculatorBase {
           .AddPacket(MakePacket<std::vector<Anchor>>(initial_anchor_data)
                          .At(cc->InputTimestamp()));
     }
-    if (cc->Outputs().HasTag(kUserRotationsTag)) {
+    if (cc->Outputs().HasTag(kUserTransformsTag)) {
       cc->Outputs()
-          .Tag(kUserRotationsTag)
-          .AddPacket(MakePacket<std::vector<UserRotation>>(user_rotation_data)
-                         .At(cc->InputTimestamp()));
-    }
-    if (cc->Outputs().HasTag(kUserScalingsTag)) {
-      cc->Outputs()
-          .Tag(kUserScalingsTag)
-          .AddPacket(MakePacket<std::vector<UserScaling>>(user_scaling_data)
+          .Tag(kUserTransformsTag)
+          .AddPacket(MakePacket<std::vector<UserTransform>>(user_transform_data)
                          .At(cc->InputTimestamp()));
     }
     if (cc->Outputs().HasTag(kRenderDescriptorsTag)) {
