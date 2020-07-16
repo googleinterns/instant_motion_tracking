@@ -26,7 +26,8 @@ node {
   calculator: "StickerManagerCalculator"
   input_stream: "PROTO:sticker_proto_string"
   output_stream: "ANCHORS:initial_anchor_data"
-  output_stream: "USER_TRANSFORMS:user_transform_data"
+  output_stream: "USER_ROTATIONS:user_rotation_data"
+  output_stream: "USER_SCALINGS:user_scaling_data"
   output_stream: "RENDER_DATA:sticker_render_data"
 }
 
@@ -44,7 +45,8 @@ node {
   calculator: "MatricesManagerCalculator"
   input_stream: "ANCHORS:tracked_anchor_data"
   input_stream: "IMU_DATA:imu_data"
-  input_stream: "USER_TRANSFORMS:user_transform_data"
+  input_stream: "USER_ROTATIONS:user_rotation_data"
+  input_stream: "USER_SCALINGS:user_scaling_data"
   input_stream: "RENDER_DATA:sticker_render_data"
   output_stream: "MODEL_MATRICES:model_matrices"
   input_side_packet: "FOV:vertical_fov_radians"
