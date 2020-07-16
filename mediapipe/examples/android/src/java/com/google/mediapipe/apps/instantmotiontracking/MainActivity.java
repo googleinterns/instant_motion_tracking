@@ -52,10 +52,17 @@ import com.google.mediapipe.framework.AndroidPacketCreator;
 import com.google.mediapipe.framework.Packet;
 import com.google.mediapipe.glutil.EglManager;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.gifdecoder.StandardGifDecoder;
+import com.bumptech.glide.load.resource.gif.GifDrawable;
+import com.bumptech.glide.request.target.SimpleTarget;
+import com.bumptech.glide.request.transition.Transition;
 
 public class MainActivity extends AppCompatActivity {
   private static final String TAG = "MainActivity";
@@ -97,14 +104,16 @@ public class MainActivity extends AppCompatActivity {
 
   // Parameters of device visual field for rendering system
   // (68 degrees, 4:3 for Pixel 4)
+  // TODO: Make acquisition of this information automated
   private final float VERTICAL_FOV_RADIANS = (float)Math.toRadians(68.0);
   private final float ASPECT_RATIO = (4.0f/3.0f);
   private final String FOV_SIDE_PACKET_TAG = "vertical_fov_radians";
   private final String ASPECT_RATIO_SIDE_PACKET_TAG = "aspect_ratio";
-  // TODO: Make acquisition of this information automated
 
   private float[] imuData = new float[3]; // [roll,pitch,yaw]
 
+  private static final String STICKER_PROTO_TAG = "sticker_proto_string";
+  private static final String IMU_DATA_TAG = "imu_data";
   // Assets for object rendering
   // All robot animation assets and tags
   private Bitmap robotTexture = null;
@@ -118,6 +127,13 @@ public class MainActivity extends AppCompatActivity {
   private static final String DINO_FILE = "dino.obj.uuu";
   private static final String DINO_TEXTURE_TAG = "dino_texture";
   private static final String DINO_ASSET_TAG = "dino_asset_name";
+  // All GIF animation assets and tags
+  private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
+  private Bitmap defaultGIFTexture = null; // Texture sent if no gif available
+  private static final String DEFAULT_GIF_TEXTURE = "default_gif_texture.bmp";
+  private static final String GIF_FILE = "gif.obj.uuu";
+  private static final String GIF_TEXTURE_TAG = "gif_texture";
+  private static final String GIF_ASSET_TAG = "gif_asset_name";
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -150,6 +166,9 @@ public class MainActivity extends AppCompatActivity {
     PermissionHelper.checkAndRequestCameraPermissions(this);
 
     // Send loaded 3d render assets as side packets to graph
+
+    // Load a basic GIF for initialization of GIF assets
+    setGIFBitmaps("https://i.giphy.com/media/fDO2Nk0ImzvvW/source.gif");
     prepareDemoAssets();
     AndroidPacketCreator packetCreator = processor.getPacketCreator();
     Map<String, Packet> inputSidePackets = new HashMap<>();
@@ -157,6 +176,7 @@ public class MainActivity extends AppCompatActivity {
     inputSidePackets.put(ROBOT_ASSET_TAG, packetCreator.createString(ROBOT_FILE));
     inputSidePackets.put(DINO_TEXTURE_TAG, packetCreator.createRgbaImageFrame(dinoTexture));
     inputSidePackets.put(DINO_ASSET_TAG, packetCreator.createString(DINO_FILE));
+    inputSidePackets.put(GIF_ASSET_TAG, packetCreator.createString(GIF_FILE));
     processor.setInputSidePackets(inputSidePackets);
 
     // Add frame listener to PacketManagement system
@@ -329,6 +349,9 @@ public class MainActivity extends AppCompatActivity {
             else if(sticker.getRenderAssetID() == 1) { // dino
               setStickerButtonDesign(stickerButton, R.drawable.dino);
             }
+            else if(sticker.getRenderAssetID() == 2) { // GIF
+              setUIControlButtonDesign(stickerButton, R.drawable.baseline_gif_24);
+            }
 
             buttonLayout.addView(stickerButton);
         }
@@ -362,6 +385,31 @@ public class MainActivity extends AppCompatActivity {
         btn.setPadding(25,25,25,25);
         btn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
     }
+
+public void setGIFBitmaps(String gif_url) {
+  Glide.with(this).asGif().load(gif_url).into(new SimpleTarget<GifDrawable>() {
+    @Override
+    public void onResourceReady(GifDrawable resource, Transition<? super GifDrawable> transition) {
+      try {
+        Object startConstant = resource.getConstantState();
+        Field frameManager = startConstant.getClass().getDeclaredField("frameLoader");
+        frameManager.setAccessible(true);
+        Object frameLoader = frameManager.get(startConstant);
+
+        Field decoder = frameLoader.getClass().getDeclaredField("gifDecoder");
+        decoder.setAccessible(true);
+        StandardGifDecoder GIFDecoder = (StandardGifDecoder) decoder.get(frameLoader);
+        for (int i = 0; i < GIFDecoder.getFrameCount(); i++) {
+          GIFDecoder.advance();
+          GIFBitmaps.add(GIFDecoder.getNextFrame());
+        }
+      }
+      catch (Exception e) {
+        e.printStackTrace();
+      }
+    }
+  });
+}
 
   protected void onResume() {
     super.onResume();
@@ -469,18 +517,41 @@ public class MainActivity extends AppCompatActivity {
       Log.e(TAG, "Error parsing object texture; error: " + e);
       throw new IllegalStateException(e);
     }
+
+    try {
+      InputStream inputStream = getAssets().open(DEFAULT_GIF_TEXTURE);
+      defaultGIFTexture = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
+      inputStream.close();
+    } catch (Exception e) {
+      Log.e(TAG, "Error parsing object texture; error: " + e);
+      throw new IllegalStateException(e);
+    }
   }
 
   private class MediaPipePacketManager implements FrameProcessor.OnWillAddFrameListener {
+    int gif_idx = 0;
     @Override
     public void onWillAddFrame(long timestamp) {
-      // Communicate sticker data protobuffer and IMU sensory data to MediaPipe graph
+      Bitmap bmp = defaultGIFTexture;
+      // Cycle through every possible frame
+      if(gif_idx >= GIFBitmaps.size())
+        gif_idx = 0;
+      // If GIF frames are available
+      if(GIFBitmaps.size() > 0)
+        bmp = GIFBitmaps.get(gif_idx++);
+
+      // Initialize sticker data protobuffer packet information
       Packet stickerProtoDataPacket = processor.getPacketCreator().createSerializedProto(Sticker.getMessageLiteData(stickerArrayList));
+      // Define and set the IMU sensory information float array
       Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(imuData);
-      processor.getGraph().addConsumablePacketToInputStream("sticker_proto_string", stickerProtoDataPacket, timestamp);
-      processor.getGraph().addConsumablePacketToInputStream("imu_data", imuDataPacket, timestamp);
+      // Communicate GIF textures (dynamic texturing) to graph
+      Packet gifTexturePacket = processor.getPacketCreator().createRgbaImageFrame(bmp);
+      processor.getGraph().addConsumablePacketToInputStream(STICKER_PROTO_TAG, stickerProtoDataPacket, timestamp);
+      processor.getGraph().addConsumablePacketToInputStream(IMU_DATA_TAG, imuDataPacket, timestamp);
+      processor.getGraph().addConsumablePacketToInputStream(GIF_TEXTURE_TAG, gifTexturePacket, timestamp);
       stickerProtoDataPacket.release();
       imuDataPacket.release();
+      gifTexturePacket.release();
     }
   }
 }

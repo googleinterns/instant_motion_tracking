@@ -18,6 +18,7 @@
 input_stream: "input_video"
 input_stream: "sticker_proto_string"
 input_stream: "imu_data"
+input_stream: "gif_texture"
 output_stream: "output_video"
 
 # Converts sticker data into user data (rotations/scalings), render data, and
@@ -59,9 +60,12 @@ node {
   input_stream: "VIDEO:input_video"
   input_stream: "MODEL_MATRICES:model_matrices"
   input_stream: "RENDER_DATA:sticker_render_data"
+  # GIFs have dynamic texturing, so an input_stream is required
+  input_stream: "GIF_TEXTURE:gif_texture"
   output_stream: "output_video"
   input_side_packet: "ROBOT_TEXTURE:robot_texture"
   input_side_packet: "ROBOT_ASSET:robot_asset_name"
   input_side_packet: "DINO_TEXTURE:dino_texture"
   input_side_packet: "DINO_ASSET:dino_asset_name"
+  input_side_packet: "GIF_ASSET:gif_asset_name"
 }

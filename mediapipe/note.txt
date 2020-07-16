@@ -12,21 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-syntax = "proto2";
-
-package instantmotiontracking;
-
-option java_package = "com.google.mediapipe.apps.instantmotiontracking";
-
-message Sticker {
-  required int32 id = 1;
-  required float x = 2;
-  required float y = 3;
-  required float rotation = 4;
-  required float scale = 5;
-  required int32 renderID = 6;
-}
-
-message StickerRoll {
-  repeated Sticker sticker = 1;
-}
+In order to install the GIF handling libraries for dynamic texturing, the following lines must be added to the bottom of the
+maven-install section of the WORKSPACE file:
+```
+"com.github.bumptech.glide:glide:4.11.0",
+"com.github.bumptech.glide:gifdecoder:4.11.0",
+```
