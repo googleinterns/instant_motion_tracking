@@ -20,17 +20,15 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files(["LICENSE"])
 
-cc_library(
-  name = "sticker_buffer",
-  srcs = [
-      "sticker_buffer.pb.cc",
-  ],
-  hdrs = [
-      "sticker_buffer.pb.h",
-  ],
-  deps = [
-      "@com_google_protobuf//:protobuf",
-  ],
+mediapipe_cc_proto_library(
+    name = "sticker_buffer_cc_proto",
+    srcs = [
+        "sticker_buffer.proto"
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_protobuf//:protobuf",
+    ],
 )
 
 cc_library(
@@ -44,7 +42,7 @@ cc_library(
     name = "sticker_manager_calculator",
     srcs = ["sticker_manager_calculator.cc"],
     deps = [
-        ":sticker_buffer",
+        ":sticker_buffer_cc_proto",
         ":transformations",
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework:timestamp",
