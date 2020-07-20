@@ -170,7 +170,8 @@ public class MainActivity extends AppCompatActivity {
     // Send loaded 3d render assets as side packets to graph
 
     // Load a basic GIF for initialization of GIF assets
-    setGIFBitmaps("https://i.giphy.com/media/fDO2Nk0ImzvvW/source.gif");
+    String goofy_gif = "http://media.tenor.com/images/bce26b3402f8c22452fb648ee2276ff2/tenor.gif";
+    setGIFBitmaps(goofy_gif);
     prepareDemoAssets();
     AndroidPacketCreator packetCreator = processor.getPacketCreator();
 

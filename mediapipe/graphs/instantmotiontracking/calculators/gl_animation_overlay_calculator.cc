@@ -598,24 +598,37 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     const std::vector<int> render_ids = cc->Inputs().Tag("RENDER_DATA").Get<std::vector<int>>();
 
     if (has_model_matrix_stream_) {
-      int idx = 0;
-      for (const ModelMatrix &model_matrix : current_model_matrices_) {
-        int render_id = render_ids[idx];
-        if(render_id == 0) { // robot
-          MP_RETURN_IF_ERROR(GlBind(robot_current_frame, robot_texture_));
-          MP_RETURN_IF_ERROR(GlRender(robot_current_frame, model_matrix.get()));
+      // Bind robot texture and render all robot matrices
+      MP_RETURN_IF_ERROR(GlBind(robot_current_frame, robot_texture_));
+      for (int idx = 0; idx < current_model_matrices_.size(); idx++) {
+        if(render_ids[idx] == 0) { // robot
+          MP_RETURN_IF_ERROR(GlRender(robot_current_frame, current_model_matrices_[idx].get()));
         }
-        else if(render_id == 1) { // dino
-          MP_RETURN_IF_ERROR(GlBind(dino_current_frame, dino_texture_));
-          MP_RETURN_IF_ERROR(GlRender(dino_current_frame, model_matrix.get()));
-        }
-        else if(render_id == 2) { // GIF
-          MP_RETURN_IF_ERROR(GlBind(gif_current_frame, gif_texture_));
-          MP_RETURN_IF_ERROR(GlRender(gif_current_frame, model_matrix.get()));
-        }
-        idx++; // iterate to next render_id
       }
-    } else {
+      // Unbind robot texture
+      GLCHECK(glBindTexture(robot_texture_.target(), 0));
+
+      // Bind dino texture and render all dino matrices
+      MP_RETURN_IF_ERROR(GlBind(dino_current_frame, dino_texture_));
+      for (int idx = 0; idx < current_model_matrices_.size(); idx++) {
+        if(render_ids[idx] == 1) { // dino
+          MP_RETURN_IF_ERROR(GlRender(dino_current_frame, current_model_matrices_[idx].get()));
+        }
+      }
+      // Unbind dino texture
+      GLCHECK(glBindTexture(dino_texture_.target(), 0));
+
+      // Bind GIF texture and render all GIF matrices
+      MP_RETURN_IF_ERROR(GlBind(gif_current_frame, gif_texture_));
+      for (int idx = 0; idx < current_model_matrices_.size(); idx++) {
+        if(render_ids[idx] == 2) { // GIF
+          MP_RETURN_IF_ERROR(GlRender(gif_current_frame, current_model_matrices_[idx].get()));
+        }
+      }
+      // Unbind GIF texture
+      GLCHECK(glBindTexture(gif_texture_.target(), 0));
+    }
+    else {
       // Do nothing.
     }
 
@@ -625,12 +638,6 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
 
     // Disable depth test
     GLCHECK(glDisable(GL_DEPTH_TEST));
-
-    // Unbind textures
-    GLCHECK(glActiveTexture(GL_TEXTURE1));
-    GLCHECK(glBindTexture(robot_texture_.target(), 0));
-    GLCHECK(glBindTexture(dino_texture_.target(), 0));
-    GLCHECK(glBindTexture(gif_texture_.target(), 0));
 
     // Unbind depth buffer
     GLCHECK(glBindRenderbuffer(GL_RENDERBUFFER, 0));
