@@ -42,10 +42,11 @@ namespace {
   constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
   constexpr char kFOVSidePacketTag[] = "FOV";
   constexpr char kAspectRatioSidePacketTag[] = "ASPECT_RATIO";
-  float vertical_fov_radians_ = 0;
-  float aspect_ratio_ = 0;
   // initial Z value (-10 is center point in visual range for OpenGL render)
-  const float initial_z_ = -10;
+  constexpr float kInitialZ = -10.0f;
+  // Device properties that will be preset by side packets
+  float vertical_fov_radians_ = 0.0f;
+  float aspect_ratio_ = 0.0f;
 }
 
 // Intermediary for rotation and translation data to model matrix usable by
@@ -58,7 +59,9 @@ namespace {
 //  ASPECT_RATIO - Aspect ratio of device [REQUIRED - Defines perspective matrix]
 //
 // Input:
-//  ANCHORS - Anchor data with normalized x,y,z coordinates [REQUIRED]
+//  ANCHORS - Anchor data with x,y,z coordinates (x,y are in [0.0-1.0] range for
+//    position on the device screen, while z is the scaling factor that changes
+//    in proportion to the distance from the tracked region) [REQUIRED]
 //  IMU_DATA - float[3] of [roll, pitch, yaw] of device [REQUIRED]
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
@@ -106,18 +109,21 @@ class MatricesManagerCalculator : public CalculatorBase {
       }
     }
 
+    // TODO: Initial sticker setup based on ID (default rotation, scale, etc.) should
+    // be built into the sticker pipeline
+
     // This returns a scale factor by which to alter the projection matrix for
     // the specified render id in order to ensure all objects render at a similar
     // size in the view screen upon initial placement
     const float GetDefaultRenderScale(const int render_id) {
       if(render_id == 0) { // Robot
-        return 5.0;
+        return 5.0f;
       }
       else if(render_id == 1) { // Dino
-        return 0.75;
+        return 0.75f;
       }
       else if(render_id == 2) { // GIF
-        return 0.15;
+        return 0.15f;
       }
     }
 };
@@ -134,25 +140,12 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     && cc->InputSidePackets().HasTag(kAspectRatioSidePacketTag));
   RET_CHECK(cc->Outputs().HasTag(kModelMatricesTag));
 
-  if (cc->Inputs().HasTag(kAnchorsTag)) {
-    cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-  }
-  if (cc->Inputs().HasTag(kIMUDataTag)) {
-    cc->Inputs().Tag(kIMUDataTag).Set<float[]>();
-  }
-  if (cc->Inputs().HasTag(kUserScalingsTag)) {
-      cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
-  }
-  if (cc->Inputs().HasTag(kUserRotationsTag)) {
-    cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
-  }
-  if (cc->Inputs().HasTag(kRendersTag)) {
-    cc->Inputs().Tag(kRendersTag).Set<std::vector<int>>();
-  }
-  if (cc->Outputs().HasTag(kModelMatricesTag)) {
-    cc->Outputs().Tag(kModelMatricesTag).Set<TimedModelMatrixProtoList>();
-  }
-
+  cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
+  cc->Inputs().Tag(kIMUDataTag).Set<float[]>();
+  cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
+  cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
+  cc->Inputs().Tag(kRendersTag).Set<std::vector<int>>();
+  cc->Outputs().Tag(kModelMatricesTag).Set<TimedModelMatrixProtoList>();
   cc->InputSidePackets().Tag(kFOVSidePacketTag).Set<float>();
   cc->InputSidePackets().Tag(kAspectRatioSidePacketTag).Set<float>();
 
@@ -202,26 +195,27 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     model_matrix->set_id(id);
 
     // The user transformation data associate with this sticker must be defined
-    const float rotation = GetUserRotation(user_rotation_data, id);
-    const float scaler = GetUserScaler(user_scaling_data, id);
+    const float user_rotation_radians = GetUserRotation(user_rotation_data, id);
+    const float user_scale_factor = GetUserScaler(user_scaling_data, id);
+    // We can also get the initial scaling factor based on the preset factor for this render id
+    const float render_scale_factor = GetDefaultRenderScale(render_data[render_idx++]);
+    // The final scaling factor (combined user and render preset) can be generated
+    const float scale_factor = user_scale_factor * render_scale_factor;
 
     // A vector representative of a user's sticker rotation transformation can be created
-    const Matrix3f user_rotation_submatrix = GenerateUserRotationMatrix(rotation);
-    // Next, the submatrix representative of the user's scaling transformation must be generated
-    const DiagonalMatrix3f user_scaling_submatrix = GenerateScalingMatrix(scaler);
+    const Matrix3f user_rotation_submatrix = GenerateUserRotationMatrix(user_rotation_radians);
+    // Next, the diagonal representative of the combined scaling data
+    const DiagonalMatrix3f scaling_diagonal = GenerateScalingMatrix(scale_factor);
 
     // The user transformation data can be concatenated into a final rotation submatrix with the
     // device IMU rotational data
-    const Matrix3f user_transformed_rotation_submatrix = user_scaling_submatrix * imu_rotation_submatrix * user_rotation_submatrix;
-
-    // We can also generate the initial scaling diagonal based on the preset scale factor for this render id
-    const DiagonalMatrix3f render_scaling_diagonal = GenerateScalingMatrix(GetDefaultRenderScale(render_data[render_idx++]));
+    const Matrix3f user_transformed_rotation_submatrix = imu_rotation_submatrix * user_rotation_submatrix * scaling_diagonal;
 
     // A vector representative of the translation of the object in OpenGL coordinate space must be generated
     const Vector3f translation_vector = GenerateAnchorVector(anchor);
 
     // Concatenate all model matrix data
-    const Matrix4fCM final_model_matrix = GenerateEigenModelMatrix(translation_vector, render_scaling_diagonal * user_transformed_rotation_submatrix);
+    const Matrix4fCM final_model_matrix = GenerateEigenModelMatrix(translation_vector, user_transformed_rotation_submatrix);
 
     // The generated model matrix must be mapped to TimedModelMatrixProto (col-wise)
     for (int x = 0; x < final_model_matrix.rows(); ++x) {
@@ -245,8 +239,8 @@ const Matrix3f MatricesManagerCalculator::GenerateUserRotationMatrix(const float
         // The rotation in radians must be inverted to rotate the object
         // with the direction of finger movement from the user (system dependent)
         Eigen::AngleAxisf(-rotation_radians, Eigen::Vector3f::UnitY()) *
-        Eigen::AngleAxisf(0, Eigen::Vector3f::UnitZ()) *
-        Eigen::AngleAxisf(0, Eigen::Vector3f::UnitX());
+        Eigen::AngleAxisf(0.0f, Eigen::Vector3f::UnitZ()) *
+        Eigen::AngleAxisf(0.0f, Eigen::Vector3f::UnitX());
   // Matrix must be transposed due to the method of submatrix generation in Eigen
   return user_rotation_submatrix.transpose();
 }
@@ -260,24 +254,24 @@ const DiagonalMatrix3f MatricesManagerCalculator::GenerateScalingMatrix(const fl
 // TODO: Investigate possible differences in warping of tracking speed across screen
 // Using the sticker anchor data, a translation vector can be generated in OpenGL coordinate space
 const Vector3f MatricesManagerCalculator::GenerateAnchorVector(const Anchor tracked_anchor) {
-  // Using an initial_z value in OpenGL space, generate a new base z-axis value to mimic scaling by distance.
-  const float z = initial_z_ * tracked_anchor.z;
+  // Using an initial z-value in OpenGL space, generate a new base z-axis value to mimic scaling by distance.
+  const float z = kInitialZ * tracked_anchor.z;
 
   // Using triangle geometry, the minimum for a y-coordinate that will appear in the view field
   // for the given z value above can be found.
-  const float y_minimum = z * (tan(vertical_fov_radians_ / 2));
+  const float y_half_range = z * (tan(vertical_fov_radians_ * 0.5f));
 
   // The aspect ratio of the device and y_minimum calculated above can be used to find the
   // minimum value for x that will appear in the view field of the device screen.
-  const float x_minimum = y_minimum * (1.0 / aspect_ratio_);
+  const float x_half_range = y_half_range * aspect_ratio_;
 
   // Given the minimum bounds of the screen in OpenGL space, the tracked anchor coordinates
   // can be converted to OpenGL coordinate space.
   //
   // (i.e: X and Y will be converted from [0.0-1.0] space to [x_minimum, -x_minimum] space
   // and [y_minimum, -y_minimum] space respectively)
-  const float x = (-2 * tracked_anchor.x * x_minimum) + x_minimum;
-  const float y = (-2 * tracked_anchor.y * y_minimum) + y_minimum;
+  const float x = (-2.0f * tracked_anchor.x * x_half_range) + x_half_range;
+  const float y = (-2.0f * tracked_anchor.y * y_half_range) + y_half_range;
 
   // A translation transformation vector can be generated via Eigen
   const Vector3f t_vector(x,y,z);
@@ -289,17 +283,19 @@ const Vector3f MatricesManagerCalculator::GenerateAnchorVector(const Anchor trac
 const Matrix3f MatricesManagerCalculator::GenerateIMURotationSubmatrix(
   const float yaw, const float pitch, const float roll) {
   Eigen::Matrix3f r_submatrix;
+  // Rotation angles are passed in clockwise, so we must negate the rotations in
+  // order to rotate the object to match
     r_submatrix =
         // The yaw value is associated with the Y-axis.
-        Eigen::AngleAxisf(yaw, Eigen::Vector3f::UnitY()) *
+        Eigen::AngleAxisf(-yaw, Eigen::Vector3f::UnitY()) *
         // The roll value is associated with the Z-axis.
-        Eigen::AngleAxisf(roll, Eigen::Vector3f::UnitZ()) *
+        Eigen::AngleAxisf(-roll, Eigen::Vector3f::UnitZ()) *
         // The pitch value is associated with the X-axis.
-        // The (-M_PI/2) must be added in order to adjust the default
+        // The (-M_PI * 0.5f) must be added in order to adjust the default
         // rendering of the object (the object should appear in the upright
         // orientation upon initial render of the scene - this is entirely
         // dependent on the construction of the .obj file).
-        Eigen::AngleAxisf(pitch - (M_PI / 2), Eigen::Vector3f::UnitX());
+        Eigen::AngleAxisf(-pitch - (M_PI * 0.5f), Eigen::Vector3f::UnitX());
     // Matrix must be transposed due to the method of submatrix generation in Eigen
     return r_submatrix.transpose();
 }
@@ -317,7 +313,7 @@ const Matrix4fCM MatricesManagerCalculator::GenerateEigenModelMatrix(
   mvp_matrix.topLeftCorner<3, 3>() = rotation_submatrix;
 
   // Set trailing 1.0 required by OpenGL to define coordinate space
-  mvp_matrix(3,3) = 1.0;
+  mvp_matrix(3,3) = 1.0f;
 
   return mvp_matrix;
 }

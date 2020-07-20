@@ -106,7 +106,7 @@ public class MainActivity extends AppCompatActivity {
   // (68 degrees, 4:3 for Pixel 4)
   // TODO: Make acquisition of this information automated
   private final float VERTICAL_FOV_RADIANS = (float)Math.toRadians(68.0);
-  private final float ASPECT_RATIO = (4.0f/3.0f);
+  private final float ASPECT_RATIO = (3.0f/4.0f);
   private final String FOV_SIDE_PACKET_TAG = "vertical_fov_radians";
   private final String ASPECT_RATIO_SIDE_PACKET_TAG = "aspect_ratio";
 
@@ -116,6 +116,8 @@ public class MainActivity extends AppCompatActivity {
   private static final String IMU_DATA_TAG = "imu_data";
   // Assets for object rendering
   // All robot animation assets and tags
+  // TODO: Grouping all tags and assets into a seperate structure
+  // TODO: bitmaps are space heavy, try to use compressed like png/webp
   private Bitmap robotTexture = null;
   private static final String ROBOT_TEXTURE = "robot_texture.bmp";
   private static final String ROBOT_FILE = "robot.obj.uuu";
@@ -171,6 +173,8 @@ public class MainActivity extends AppCompatActivity {
     setGIFBitmaps("https://i.giphy.com/media/fDO2Nk0ImzvvW/source.gif");
     prepareDemoAssets();
     AndroidPacketCreator packetCreator = processor.getPacketCreator();
+
+    // TODO: Should come from querying the video frame
     Map<String, Packet> inputSidePackets = new HashMap<>();
     inputSidePackets.put(ROBOT_TEXTURE_TAG, packetCreator.createRgbaImageFrame(robotTexture));
     inputSidePackets.put(ROBOT_ASSET_TAG, packetCreator.createString(ROBOT_FILE));
@@ -201,9 +205,11 @@ public class MainActivity extends AppCompatActivity {
       public void onAccuracyChanged(Sensor sensor, int accuracy) {}
       // Update procedure on sensor adjustment (phone changes orientation)
       public void onSensorChanged(SensorEvent event) {
-        imuData[0] = (float) Math.toRadians(event.values[0]);
-        imuData[1] = (float) Math.toRadians(event.values[1]);
-        imuData[2] = (float) Math.toRadians(event.values[2]);
+        // All values must be negated in order to adjust the object orientations
+        // to match the phone movement (passed into MatricesManagerCalculator)
+        imuData[0] = -(float) Math.toRadians(event.values[0]);
+        imuData[1] = -(float) Math.toRadians(event.values[1]);
+        imuData[2] = -(float) Math.toRadians(event.values[2]);
       }
     }, (Sensor) sensorList.get(0), SensorManager.SENSOR_DELAY_FASTEST);
 

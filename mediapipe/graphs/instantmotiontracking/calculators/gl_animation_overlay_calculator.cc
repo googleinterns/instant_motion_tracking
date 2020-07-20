@@ -626,8 +626,11 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     // Disable depth test
     GLCHECK(glDisable(GL_DEPTH_TEST));
 
-    // Unbind texture
+    // Unbind textures
     GLCHECK(glActiveTexture(GL_TEXTURE1));
+    GLCHECK(glBindTexture(robot_texture_.target(), 0));
+    GLCHECK(glBindTexture(dino_texture_.target(), 0));
+    GLCHECK(glBindTexture(gif_texture_.target(), 0));
 
     // Unbind depth buffer
     GLCHECK(glBindRenderbuffer(GL_RENDERBUFFER, 0));
@@ -750,6 +753,16 @@ GlAnimationOverlayCalculator::~GlAnimationOverlayCalculator() {
     if (depth_buffer_created_) {
       GLCHECK(glDeleteRenderbuffers(1, &renderbuffer_));
       renderbuffer_ = 0;
+    }
+    // Release all textures
+    if (robot_texture_.width() > 0) {
+      robot_texture_.Release();
+    }
+    if (dino_texture_.width() > 0) {
+      dino_texture_.Release();
+    }
+    if (gif_texture_.width() > 0) {
+      gif_texture_.Release();
     }
   });
 }

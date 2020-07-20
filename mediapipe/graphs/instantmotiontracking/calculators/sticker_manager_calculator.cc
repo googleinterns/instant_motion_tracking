@@ -58,23 +58,11 @@ class StickerManagerCalculator : public CalculatorBase {
       && cc->Outputs().HasTag(kUserScalingsTag)
       && cc->Outputs().HasTag(kRenderDescriptorsTag));
 
-    if (cc->Inputs().HasTag(kProtoDataString)) {
-      cc->Inputs().Tag(kProtoDataString).Set<std::string>();
-    }
-    if (cc->Outputs().HasTag(kAnchorsTag)) {
-      cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-    }
-    if (cc->Outputs().HasTag(kUserRotationsTag)) {
-      cc->Outputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
-    }
-    if (cc->Outputs().HasTag(kUserScalingsTag)) {
-      cc->Outputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
-    }
-    if (cc->Outputs().HasTag(kRenderDescriptorsTag)) {
-      cc->Outputs()
-          .Tag(kRenderDescriptorsTag)
-          .Set<std::vector<int>>();
-    }
+    cc->Inputs().Tag(kProtoDataString).Set<std::string>();
+    cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
+    cc->Outputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
+    cc->Outputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
+    cc->Outputs().Tag(kRenderDescriptorsTag).Set<std::vector<int>>();
 
     return ::mediapipe::OkStatus();
   }
@@ -112,7 +100,7 @@ class StickerManagerCalculator : public CalculatorBase {
       user_scaling.sticker_id = sticker.id();
       initial_anchor.x = sticker.x();
       initial_anchor.y = sticker.y();
-      initial_anchor.z = 1.0; // default to 1.0 in normalized 3d space
+      initial_anchor.z = 1.0f; // default to 1.0 in normalized 3d space
       user_rotation.rotation_radians = sticker.rotation();
       user_scaling.scale_factor = sticker.scale();
       float render_id = sticker.renderid();

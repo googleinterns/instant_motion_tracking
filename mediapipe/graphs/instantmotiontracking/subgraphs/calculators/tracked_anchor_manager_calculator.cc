@@ -27,8 +27,8 @@ constexpr char kBoxesInputTag[] = "BOXES";
 constexpr char kBoxesOutputTag[] = "START_POS";
 constexpr char kCancelTag[] = "CANCEL_ID";
 // TODO: Find optimal Height/Width (0.1-0.3)
-constexpr float kBoxHw = 0.2f; // Used to establish tracking box dimensions
-constexpr float millis_factor_ = 1000; // Used to convert from microseconds to millis
+constexpr float kBoxEdgeSize = 0.2f; // Used to establish tracking box dimensions
+constexpr float kUsToMs = 1000.0f; // Used to convert from microseconds to millis
 
 // This calculator manages the regions being tracked for each individual sticker
 // and adjusts the regions being tracked if a change is detected in a sticker's
@@ -69,18 +69,15 @@ public:
     RET_CHECK(cc->Outputs().HasTag(kAnchorsTag)
       && cc->Outputs().HasTag(kBoxesOutputTag));
 
-    if(cc->Inputs().HasTag(kAnchorsTag)) {
-      cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-    }
+    cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
+
     if(cc->Inputs().HasTag(kBoxesInputTag)) {
       cc->Inputs().Tag(kBoxesInputTag).Set<TimedBoxProtoList>();
     }
-    if(cc->Outputs().HasTag(kBoxesOutputTag)) {
-      cc->Outputs().Tag(kBoxesOutputTag).Set<TimedBoxProtoList>();
-    }
-    if(cc->Outputs().HasTag(kAnchorsTag)) {
-      cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-    }
+
+    cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
+    cc->Outputs().Tag(kBoxesOutputTag).Set<TimedBoxProtoList>();
+
     if(cc->Outputs().HasTag(kCancelTag)) {
       cc->Outputs().Tag(kCancelTag).Set<int>();
     }
@@ -111,12 +108,12 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
         // Check if anchor was repositioned by user, and reset tracking box
         if(previous_anchor.x != current_anchor.x || previous_anchor.y != current_anchor.y) {
           TimedBoxProto* box = pos_boxes->add_box();
-          box->set_left(current_anchor.x - kBoxHw * 0.5f);
-          box->set_right(current_anchor.x + kBoxHw * 0.5f);
-          box->set_top(current_anchor.y - kBoxHw * 0.5f);
-          box->set_bottom(current_anchor.y + kBoxHw * 0.5f);
+          box->set_left(current_anchor.x - kBoxEdgeSize * 0.5f);
+          box->set_right(current_anchor.x + kBoxEdgeSize * 0.5f);
+          box->set_top(current_anchor.y - kBoxEdgeSize * 0.5f);
+          box->set_bottom(current_anchor.y + kBoxEdgeSize * 0.5f);
           box->set_id(current_anchor.sticker_id);
-          box->set_time_msec(cc->InputTimestamp().Microseconds() / millis_factor_);
+          box->set_time_msec(cc->InputTimestamp().Microseconds() / kUsToMs);
           current_anchor.z = 1.0; // Default value for normalized z (scale factor)
         }
         // If anchor was not repositioned, update the location from the tracking system if associated box exists
@@ -133,7 +130,7 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
 
               // Get center z coordinate [z starts at normalized 1.0 and scales inversely with box-width]
               // TODO: Look into issues with uniform scaling on x-axis and y-axis
-              current_anchor.z = kBoxHw / (box.right() - box.left());
+              current_anchor.z = kBoxEdgeSize / (box.right() - box.left());
             }
           }
         }
