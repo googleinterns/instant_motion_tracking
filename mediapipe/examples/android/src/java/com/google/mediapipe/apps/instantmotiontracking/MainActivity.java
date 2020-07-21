@@ -131,6 +131,10 @@ public class MainActivity extends AppCompatActivity {
   private static final String DINO_ASSET_TAG = "dino_asset_name";
   // All GIF animation assets and tags
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
+  private int gifCurrentIndex = 0;
+  private static final int GIF_FRAME_RATE = 15; // 15 FPS
+  // last time the GIF was updated
+  private long gifLastFrameUpdateMS = System.currentTimeMillis();
   private Bitmap defaultGIFTexture = null; // Texture sent if no gif available
   private static final String DEFAULT_GIF_TEXTURE = "default_gif_texture.bmp";
   private static final String GIF_FILE = "gif.obj.uuu";
@@ -171,7 +175,8 @@ public class MainActivity extends AppCompatActivity {
 
     // Load a basic GIF for initialization of GIF assets
     String goofy_gif = "http://media.tenor.com/images/bce26b3402f8c22452fb648ee2276ff2/tenor.gif";
-    setGIFBitmaps(goofy_gif);
+    String transparent_gif = "https://thumbs.gfycat.com/ConsiderateRealAmericanredsquirrel-size_restricted.gif";
+    setGIFBitmaps(transparent_gif);
     prepareDemoAssets();
     AndroidPacketCreator packetCreator = processor.getPacketCreator();
 
@@ -376,47 +381,61 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // Sets ImageButton UI for Control Buttons (Delete, Add, Back)
-    public void setUIControlButtonDesign(ImageButton btn, int imageDrawable) {
-        btn.setImageDrawable(getResources().getDrawable(imageDrawable));
-        btn.setBackgroundColor(Color.parseColor("#00ffffff"));
-        btn.setLayoutParams(new LinearLayout.LayoutParams(200,200));
-        btn.setPadding(25,25,25,25);
-        btn.setScaleType(ImageView.ScaleType.FIT_XY);
-    }
+  public void setUIControlButtonDesign(ImageButton btn, int imageDrawable) {
+      btn.setImageDrawable(getResources().getDrawable(imageDrawable));
+      btn.setBackgroundColor(Color.parseColor("#00ffffff"));
+      btn.setLayoutParams(new LinearLayout.LayoutParams(200,200));
+      btn.setPadding(25,25,25,25);
+      btn.setScaleType(ImageView.ScaleType.FIT_XY);
+  }
 
-    // Sets ImageButton UI for Sticker Buttons
-    public void setStickerButtonDesign(ImageButton btn, int imageDrawable) {
-        btn.setImageDrawable(getResources().getDrawable(imageDrawable));
-        btn.setBackground(getResources().getDrawable(R.drawable.circle_button));
-        btn.setLayoutParams(new LinearLayout.LayoutParams(250,250));
-        btn.setPadding(25,25,25,25);
-        btn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-    }
+  // Sets ImageButton UI for Sticker Buttons
+  public void setStickerButtonDesign(ImageButton btn, int imageDrawable) {
+      btn.setImageDrawable(getResources().getDrawable(imageDrawable));
+      btn.setBackground(getResources().getDrawable(R.drawable.circle_button));
+      btn.setLayoutParams(new LinearLayout.LayoutParams(250,250));
+      btn.setPadding(25,25,25,25);
+      btn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+  }
 
-public void setGIFBitmaps(String gif_url) {
-  Glide.with(this).asGif().load(gif_url).into(new SimpleTarget<GifDrawable>() {
-    @Override
-    public void onResourceReady(GifDrawable resource, Transition<? super GifDrawable> transition) {
-      try {
-        Object startConstant = resource.getConstantState();
-        Field frameManager = startConstant.getClass().getDeclaredField("frameLoader");
-        frameManager.setAccessible(true);
-        Object frameLoader = frameManager.get(startConstant);
+  public void setGIFBitmaps(String gif_url) {
+    Glide.with(this).asGif().load(gif_url).into(new SimpleTarget<GifDrawable>() {
+      @Override
+      public void onResourceReady(GifDrawable resource, Transition<? super GifDrawable> transition) {
+        try {
+          Object startConstant = resource.getConstantState();
+          Field frameManager = startConstant.getClass().getDeclaredField("frameLoader");
+          frameManager.setAccessible(true);
+          Object frameLoader = frameManager.get(startConstant);
 
-        Field decoder = frameLoader.getClass().getDeclaredField("gifDecoder");
-        decoder.setAccessible(true);
-        StandardGifDecoder GIFDecoder = (StandardGifDecoder) decoder.get(frameLoader);
-        for (int i = 0; i < GIFDecoder.getFrameCount(); i++) {
-          GIFDecoder.advance();
-          GIFBitmaps.add(GIFDecoder.getNextFrame());
+          Field decoder = frameLoader.getClass().getDeclaredField("gifDecoder");
+          decoder.setAccessible(true);
+          StandardGifDecoder GIFDecoder = (StandardGifDecoder) decoder.get(frameLoader);
+          for (int i = 0; i < GIFDecoder.getFrameCount(); i++) {
+            GIFDecoder.advance();
+            GIFBitmaps.add(GIFDecoder.getNextFrame());
+          }
+        }
+        catch (Exception e) {
+          e.printStackTrace();
         }
       }
-      catch (Exception e) {
-        e.printStackTrace();
-      }
+    });
+  }
+
+  // Function that is continuously called in order to time GIF frame updates
+  public void updateGIFFrame() {
+    long millisPerFrame = 1000/GIF_FRAME_RATE;
+    if(System.currentTimeMillis() - gifLastFrameUpdateMS >= millisPerFrame) {
+      // Update GIF timestamp
+      gifLastFrameUpdateMS = System.currentTimeMillis();
+      // Cycle through every possible frame
+      if(gifCurrentIndex >= GIFBitmaps.size() - 1)
+        gifCurrentIndex = 0;
+      else
+        gifCurrentIndex++;
     }
-  });
-}
+  }
 
   protected void onResume() {
     super.onResume();
@@ -536,23 +555,22 @@ public void setGIFBitmaps(String gif_url) {
   }
 
   private class MediaPipePacketManager implements FrameProcessor.OnWillAddFrameListener {
-    int gif_idx = 0;
     @Override
     public void onWillAddFrame(long timestamp) {
-      Bitmap bmp = defaultGIFTexture;
-      // Cycle through every possible frame
-      if(gif_idx >= GIFBitmaps.size())
-        gif_idx = 0;
-      // If GIF frames are available
-      if(GIFBitmaps.size() > 0)
-        bmp = GIFBitmaps.get(gif_idx++);
+      // set current GIF bitmap as default texture
+      Bitmap currentGIFBitmap = defaultGIFTexture;
+      // If current index is in bounds, display current frame
+      if(gifCurrentIndex <= GIFBitmaps.size() - 1)
+        currentGIFBitmap = GIFBitmaps.get(gifCurrentIndex);
+      // Update to next GIF frame based on timing and frame rate
+      updateGIFFrame();
 
       // Initialize sticker data protobuffer packet information
       Packet stickerProtoDataPacket = processor.getPacketCreator().createSerializedProto(Sticker.getMessageLiteData(stickerArrayList));
       // Define and set the IMU sensory information float array
       Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(imuData);
       // Communicate GIF textures (dynamic texturing) to graph
-      Packet gifTexturePacket = processor.getPacketCreator().createRgbaImageFrame(bmp);
+      Packet gifTexturePacket = processor.getPacketCreator().createRgbaImageFrame(currentGIFBitmap);
       processor.getGraph().addConsumablePacketToInputStream(STICKER_PROTO_TAG, stickerProtoDataPacket, timestamp);
       processor.getGraph().addConsumablePacketToInputStream(IMU_DATA_TAG, imuDataPacket, timestamp);
       processor.getGraph().addConsumablePacketToInputStream(GIF_TEXTURE_TAG, gifTexturePacket, timestamp);
