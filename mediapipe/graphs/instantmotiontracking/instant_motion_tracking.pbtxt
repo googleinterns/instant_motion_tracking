@@ -49,7 +49,9 @@ node {
   input_stream: "USER_ROTATIONS:user_rotation_data"
   input_stream: "USER_SCALINGS:user_scaling_data"
   input_stream: "RENDER_DATA:sticker_render_data"
-  output_stream: "MODEL_MATRICES:model_matrices"
+  output_stream: "MATRICES:0:robot_matrices"
+  output_stream: "MATRICES:1:dino_matrices"
+  output_stream: "MATRICES:2:gif_matrices"
   input_side_packet: "FOV:vertical_fov_radians"
   input_side_packet: "ASPECT_RATIO:aspect_ratio"
 }
@@ -58,14 +60,28 @@ node {
 node {
   calculator: "GlAnimationOverlayCalculator"
   input_stream: "VIDEO:input_video"
-  input_stream: "MODEL_MATRICES:model_matrices"
-  input_stream: "RENDER_DATA:sticker_render_data"
-  # GIFs have dynamic texturing, so an input_stream is required
-  input_stream: "GIF_TEXTURE:gif_texture"
+  input_stream: "MODEL_MATRICES:robot_matrices"
+  input_side_packet: "TEXTURE:robot_texture"
+  input_side_packet: "ASSET:robot_asset_name"
+  output_stream: "robot_rendered_video"
+}
+
+# Renders the final 3d stickers and overlays them on input image.
+node {
+  calculator: "GlAnimationOverlayCalculator"
+  input_stream: "VIDEO:robot_rendered_video"
+  input_stream: "MODEL_MATRICES:dino_matrices"
+  input_side_packet: "TEXTURE:dino_texture"
+  input_side_packet: "ASSET:dino_asset_name"
+  output_stream: "dino_rendered_video"
+}
+
+# Renders the final 3d stickers and overlays them on input image.
+node {
+  calculator: "GlAnimationOverlayCalculator"
+  input_stream: "VIDEO:dino_rendered_video"
+  input_stream: "MODEL_MATRICES:gif_matrices"
+  input_stream: "TEXTURE:gif_texture"
+  input_side_packet: "ASSET:gif_asset_name"
   output_stream: "output_video"
-  input_side_packet: "ROBOT_TEXTURE:robot_texture"
-  input_side_packet: "ROBOT_ASSET:robot_asset_name"
-  input_side_packet: "DINO_TEXTURE:dino_texture"
-  input_side_packet: "DINO_ASSET:dino_asset_name"
-  input_side_packet: "GIF_ASSET:gif_asset_name"
 }

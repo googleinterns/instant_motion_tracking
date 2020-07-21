@@ -66,7 +66,7 @@ namespace {
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
 // Output:
-//  MODEL_MATRICES - TimedModelMatrixProtoList of all objects to render [REQUIRED]
+//  MATRICES - TimedModelMatrixProtoList of each object type to render [REQUIRED]
 //
 // Example config:
 // node{
@@ -75,7 +75,10 @@ namespace {
 //  input_stream: "IMU_DATA:imu_data"
 //  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "USER_SCALINGS:user_scaling_data"
-//  output_stream: "MODEL_MATRICES:model_matrices"
+//  output_stream: "MATRICES:0:first_render_matrices"
+//  output_stream: "MATRICES:1:second_render_matrices" ... [unbounded input size]
+//  input_side_packet: "FOV:vertical_fov_radians"
+//  input_side_packet: "ASPECT_RATIO:aspect_ratio"
 // }
 
 class MatricesManagerCalculator : public CalculatorBase {
@@ -138,14 +141,16 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     && cc->Inputs().HasTag(kUserScalingsTag)
     && cc->InputSidePackets().HasTag(kFOVSidePacketTag)
     && cc->InputSidePackets().HasTag(kAspectRatioSidePacketTag));
-  RET_CHECK(cc->Outputs().HasTag(kModelMatricesTag));
 
   cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
   cc->Inputs().Tag(kIMUDataTag).Set<float[]>();
   cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
   cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
   cc->Inputs().Tag(kRendersTag).Set<std::vector<int>>();
-  cc->Outputs().Tag(kModelMatricesTag).Set<TimedModelMatrixProtoList>();
+  for (CollectionItemId id = cc->Outputs().BeginId("MATRICES");
+         id < cc->Outputs().EndId("MATRICES"); ++id) {
+           cc->Outputs().Get(id).Set<TimedModelMatrixProtoList>();
+  }
   cc->InputSidePackets().Tag(kFOVSidePacketTag).Set<float>();
   cc->InputSidePackets().Tag(kAspectRatioSidePacketTag).Set<float>();
 
@@ -161,9 +166,14 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
 }
 
 ::mediapipe::Status MatricesManagerCalculator::Process(CalculatorContext* cc) {
-  auto model_matrices = std::make_unique<TimedModelMatrixProtoList>();
-  TimedModelMatrixProtoList* model_matrix_list = model_matrices.get();
-  model_matrix_list->clear_model_matrix();
+  // Define each object's model matrices
+  auto robot_matrices = std::make_unique<TimedModelMatrixProtoList>();
+  auto dino_matrices = std::make_unique<TimedModelMatrixProtoList>();
+  auto gif_matrices = std::make_unique<TimedModelMatrixProtoList>();
+  // Clear all model matrices
+  robot_matrices.get()->clear_model_matrix();
+  dino_matrices.get()->clear_model_matrix();
+  gif_matrices.get()->clear_model_matrix();
 
   const std::vector<UserRotation> user_rotation_data =
       cc->Inputs().Tag(kUserRotationsTag).Get<std::vector<UserRotation>>();
@@ -190,8 +200,19 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   for (const Anchor &anchor : anchor_data) {
     const int id = anchor.sticker_id;
 
-    TimedModelMatrixProto* model_matrix =
-        model_matrix_list->add_model_matrix();
+    TimedModelMatrixProto* model_matrix;
+
+    // Add model matrix to matrices list for defined object render ID
+    if (render_data[render_idx] == 0) { // robot
+      model_matrix = robot_matrices.get()->add_model_matrix();
+    }
+    else if (render_data[render_idx] == 1) { // dino
+      model_matrix = dino_matrices.get()->add_model_matrix();
+    }
+    else if (render_data[render_idx] == 2) { // GIF
+      model_matrix = gif_matrices.get()->add_model_matrix();
+    }
+
     model_matrix->set_id(id);
 
     // The user transformation data associate with this sticker must be defined
@@ -225,9 +246,16 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     }
   }
 
+  // Output all individual render matrices
   cc->Outputs()
-      .Tag(kModelMatricesTag)
-      .Add(model_matrices.release(), cc->InputTimestamp());
+          .Get(cc->Outputs().GetId("MATRICES", 0))
+          .Add(robot_matrices.release(), cc->InputTimestamp());
+  cc->Outputs()
+          .Get(cc->Outputs().GetId("MATRICES", 1))
+          .Add(dino_matrices.release(), cc->InputTimestamp());
+  cc->Outputs()
+          .Get(cc->Outputs().GetId("MATRICES", 2))
+          .Add(gif_matrices.release(), cc->InputTimestamp());
 
   return ::mediapipe::OkStatus();
 }
