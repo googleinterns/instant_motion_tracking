@@ -76,7 +76,7 @@ namespace {
 //  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "USER_SCALINGS:user_scaling_data"
 //  output_stream: "MATRICES:0:first_render_matrices"
-//  output_stream: "MATRICES:1:second_render_matrices" ... [unbounded input size]
+//  output_stream: "MATRICES:1:second_render_matrices" [unbounded input size]
 //  input_side_packet: "FOV:vertical_fov_radians"
 //  input_side_packet: "ASPECT_RATIO:aspect_ratio"
 // }
