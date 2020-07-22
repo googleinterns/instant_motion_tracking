@@ -130,9 +130,11 @@ public class MainActivity extends AppCompatActivity {
   private static final String DINO_TEXTURE_TAG = "dino_texture";
   private static final String DINO_ASSET_TAG = "dino_asset_name";
   // All GIF animation assets and tags
+  private static final String GOOFY_TEST_GIF =
+    "http://media.tenor.com/images/bce26b3402f8c22452fb648ee2276ff2/tenor.gif";
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
   private int gifCurrentIndex = 0;
-  private static final int GIF_FRAME_RATE = 15; // 15 FPS
+  private static final int GIF_FRAME_RATE = 20; // 20 FPS
   // last time the GIF was updated
   private long gifLastFrameUpdateMS = System.currentTimeMillis();
   private Bitmap defaultGIFTexture = null; // Texture sent if no gif available
@@ -174,9 +176,7 @@ public class MainActivity extends AppCompatActivity {
     // Send loaded 3d render assets as side packets to graph
 
     // Load a basic GIF for initialization of GIF assets
-    String goofy_gif = "http://media.tenor.com/images/bce26b3402f8c22452fb648ee2276ff2/tenor.gif";
-    String transparent_gif = "https://thumbs.gfycat.com/ConsiderateRealAmericanredsquirrel-size_restricted.gif";
-    setGIFBitmaps(transparent_gif);
+    setGIFBitmaps(GOOFY_TEST_GIF);
     prepareDemoAssets();
     AndroidPacketCreator packetCreator = processor.getPacketCreator();
 
@@ -384,8 +384,8 @@ public class MainActivity extends AppCompatActivity {
   public void setUIControlButtonDesign(ImageButton btn, int imageDrawable) {
       btn.setImageDrawable(getResources().getDrawable(imageDrawable));
       btn.setBackgroundColor(Color.parseColor("#00ffffff"));
-      btn.setLayoutParams(new LinearLayout.LayoutParams(200,200));
-      btn.setPadding(25,25,25,25);
+      btn.setLayoutParams(new LinearLayout.LayoutParams(200, 200));
+      btn.setPadding(25, 25, 25, 25);
       btn.setScaleType(ImageView.ScaleType.FIT_XY);
   }
 
@@ -393,8 +393,8 @@ public class MainActivity extends AppCompatActivity {
   public void setStickerButtonDesign(ImageButton btn, int imageDrawable) {
       btn.setImageDrawable(getResources().getDrawable(imageDrawable));
       btn.setBackground(getResources().getDrawable(R.drawable.circle_button));
-      btn.setLayoutParams(new LinearLayout.LayoutParams(250,250));
-      btn.setPadding(25,25,25,25);
+      btn.setLayoutParams(new LinearLayout.LayoutParams(250, 250));
+      btn.setPadding(25, 25, 25, 25);
       btn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
   }
 
@@ -430,10 +430,7 @@ public class MainActivity extends AppCompatActivity {
       // Update GIF timestamp
       gifLastFrameUpdateMS = System.currentTimeMillis();
       // Cycle through every possible frame
-      if(gifCurrentIndex >= GIFBitmaps.size() - 1)
-        gifCurrentIndex = 0;
-      else
-        gifCurrentIndex++;
+      gifCurrentIndex = (gifCurrentIndex + 1) % GIFBitmaps.size();
     }
   }
 
