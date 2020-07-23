@@ -1,0 +1,87 @@
+# Copyright 2020 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# MediaPipe graph that performs region tracking and 3d object (AR sticker) rendering.
+
+# Images in/out of graph with sticker data and IMU information from device
+input_stream: "input_video"
+input_stream: "sticker_proto_string"
+input_stream: "imu_data"
+input_stream: "gif_texture"
+output_stream: "output_video"
+
+# Converts sticker data into user data (rotations/scalings), render data, and
+# initial anchors.
+node {
+  calculator: "StickerManagerCalculator"
+  input_stream: "PROTO:sticker_proto_string"
+  output_stream: "ANCHORS:initial_anchor_data"
+  output_stream: "USER_ROTATIONS:user_rotation_data"
+  output_stream: "USER_SCALINGS:user_scaling_data"
+  output_stream: "RENDER_DATA:sticker_render_data"
+}
+
+# Uses box tracking in order to create 'anchors' for associated 3d stickers.
+node {
+  calculator: "RegionTrackingSubgraph"
+  input_stream: "VIDEO:input_video"
+  input_stream: "ANCHORS:initial_anchor_data"
+  output_stream: "ANCHORS:tracked_anchor_data"
+}
+
+# Concatenates all transformations to generate model matrices for the OpenGL
+# animation overlay calculator.
+node {
+  calculator: "MatricesManagerCalculator"
+  input_stream: "ANCHORS:tracked_anchor_data"
+  input_stream: "IMU_DATA:imu_data"
+  input_stream: "USER_ROTATIONS:user_rotation_data"
+  input_stream: "USER_SCALINGS:user_scaling_data"
+  input_stream: "RENDER_DATA:sticker_render_data"
+  output_stream: "MATRICES:0:robot_matrices"
+  output_stream: "MATRICES:1:dino_matrices"
+  output_stream: "MATRICES:2:gif_matrices"
+  input_side_packet: "FOV:vertical_fov_radians"
+  input_side_packet: "ASPECT_RATIO:aspect_ratio"
+}
+
+# Renders the final 3d stickers and overlays them on input image.
+node {
+  calculator: "GlAnimationOverlayCalculator"
+  input_stream: "VIDEO:input_video"
+  input_stream: "MODEL_MATRICES:robot_matrices"
+  input_side_packet: "TEXTURE:robot_texture"
+  input_side_packet: "ASSET:robot_asset_name"
+  output_stream: "robot_rendered_video"
+}
+
+# Renders the final 3d stickers and overlays them on input image.
+node {
+  calculator: "GlAnimationOverlayCalculator"
+  input_stream: "VIDEO:robot_rendered_video"
+  input_stream: "MODEL_MATRICES:dino_matrices"
+  input_side_packet: "TEXTURE:dino_texture"
+  input_side_packet: "ASSET:dino_asset_name"
+  output_stream: "dino_rendered_video"
+}
+
+# Renders the final 3d stickers and overlays them on input image.
+node {
+  calculator: "GlAnimationOverlayCalculator"
+  input_stream: "VIDEO:dino_rendered_video"
+  input_stream: "MODEL_MATRICES:gif_matrices"
+  input_stream: "TEXTURE:gif_texture"
+  input_side_packet: "ASSET:gif_asset_name"
+  output_stream: "output_video"
+}

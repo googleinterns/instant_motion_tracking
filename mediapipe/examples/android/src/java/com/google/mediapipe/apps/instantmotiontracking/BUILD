@@ -2,7 +2,6 @@ licenses(["notice"])  # Apache 2.0
 
 package(default_visibility = ["//visibility:private"])
 
-# Basic library common across example apps.
 android_library(
     name = "basic_lib",
     srcs = glob(["*.java"]),
@@ -19,6 +18,9 @@ android_library(
         "//third_party:opencv",
         "@maven//:androidx_concurrent_concurrent_futures",
         "@maven//:com_google_guava_guava",
+        "@maven//:com_github_bumptech_glide_glide",
+        "@maven//:com_github_bumptech_glide_gifdecoder",
+        "@com_google_protobuf//:protobuf_java",
     ],
 )
 
@@ -43,7 +45,13 @@ cc_library(
 android_binary(
     name = "instantmotiontracking",
     assets = [
-	      "//mediapipe/graphs/instantmotiontracking:mobile.binarypb",
+        "//mediapipe/graphs/instantmotiontracking:mobile.binarypb",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/robot:robot.obj.uuu",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/robot:robot_texture.bmp",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/dino:dino.obj.uuu",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/dino:dino_texture.bmp",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/gif:gif.obj.uuu",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/gif:default_gif_texture.bmp",
     ],
     assets_dir = "",
     manifest = "AndroidManifest.xml",
@@ -54,7 +62,7 @@ android_binary(
         "cameraFacingFront": "False",
         "binaryGraphName": "mobile.binarypb",
         "inputVideoStreamName": "input_video",
-        "outputVideoStreamName": "input_video",
+        "outputVideoStreamName": "output_video",
     },
     multidex = "native",
     deps = [

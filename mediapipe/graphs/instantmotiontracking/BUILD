@@ -1,4 +1,4 @@
-# Copyright 2019 The MediaPipe Authors.
+# Copyright 2020 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "mobile_calculators",
     deps = [
-        # Calculator dependencies go here with BUILD targets, examples:
-        # "//mediapipe/calculators/image:luminance_calculator",
-        # "//mediapipe/calculators/image:sobel_edges_calculator",
+        "//mediapipe/graphs/instantmotiontracking/subgraphs:region_tracking",
+        "//mediapipe/graphs/instantmotiontracking/calculators:sticker_manager_calculator",
+        "//mediapipe/graphs/instantmotiontracking/calculators:matrices_manager_calculator",
+        "//mediapipe/graphs/instantmotiontracking/calculators:gl_animation_overlay_calculator",
     ],
 )
 
@@ -32,6 +33,6 @@ load(
 
 mediapipe_binary_graph(
     name = "mobile_binary_graph",
-    graph = "instantmotiontracking.pbtxt",
+    graph = "instant_motion_tracking.pbtxt",
     output_name = "mobile.binarypb",
 )
