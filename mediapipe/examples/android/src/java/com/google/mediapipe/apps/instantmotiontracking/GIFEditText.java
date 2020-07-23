@@ -32,6 +32,11 @@ import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION_CODES.N_MR1;
 
 public class GIFEditText extends AppCompatEditText {
+
+  private OnRichContentListener onRichContentListener = null;
+  private String[] mimeTypes = {};
+  public boolean runListenerInBackground = true;
+
     public GIFEditText(Context context) {
         super(context);
     }
@@ -54,11 +59,6 @@ public class GIFEditText extends AppCompatEditText {
 
         void onRichContent(Uri contentUri, ClipDescription description);
     }
-
-    private OnRichContentListener onRichContentListener = null;
-    private String[] mimeTypes = {};
-    private static final String TAG = "GIFEditText";
-    public boolean runListenerInBackground = true;
 
     public void setOnRichContentListener(OnRichContentListener onRichContentListener) {
         this.onRichContentListener = onRichContentListener;
@@ -95,7 +95,6 @@ public class GIFEditText extends AppCompatEditText {
                                     else runnable.run();
                                 }
                             } catch (Exception e) {
-                                Log.e(TAG, "Error accepting rich content: " + e.getMessage());
                                 e.printStackTrace();
                                 return false;
                             }

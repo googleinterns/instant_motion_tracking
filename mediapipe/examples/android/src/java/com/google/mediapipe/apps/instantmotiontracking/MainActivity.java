@@ -16,6 +16,7 @@ package com.google.mediapipe.apps.instantmotiontracking;
 
 import android.content.ClipDescription;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -163,11 +164,13 @@ public class MainActivity extends AppCompatActivity {
     editText.setOnRichContentListener(new GIFEditText.OnRichContentListener() {
         @Override
         public void onRichContent(Uri contentUri, ClipDescription description) {
-            File rcf = new File(getFilesDir(), System.currentTimeMillis() + ".gif");
-            if (writeToFileFromContentUri(rcf, contentUri)) {
-                setGIFBitmaps("file://" + rcf.getAbsolutePath());
-            }
-            closeKeyboard();
+          // The application must have permission to access the GIF content URI
+          grantUriPermission("com.google.mediapipe.apps.instantmotiontracking",
+            contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+          // Set GIF frames from content URI
+          setGIFBitmaps(contentUri.toString());
+          // Close the keyboard upon GIF acquisition
+          closeKeyboard();
         }
     });
 
@@ -466,8 +469,8 @@ public class MainActivity extends AppCompatActivity {
     if(System.currentTimeMillis() - gifLastFrameUpdateMS >= millisPerFrame) {
       // Update GIF timestamp
       gifLastFrameUpdateMS = System.currentTimeMillis();
-      // Cycle through every possible frame
-      gifCurrentIndex = (gifCurrentIndex + 1) % GIFBitmaps.size();
+      // Cycle through every possible frame and avoid a divide by 0
+      gifCurrentIndex = (gifCurrentIndex + 1) % ((GIFBitmaps.size() > 0)?(GIFBitmaps.size()):(1));
     }
   }
 
@@ -485,27 +488,6 @@ public class MainActivity extends AppCompatActivity {
           InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
           imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
       }
-  }
-
-  public boolean writeToFileFromContentUri(File file, Uri uri) {
-      if (file == null || uri == null) return false;
-      try {
-          InputStream stream = getContentResolver().openInputStream(uri);
-          OutputStream output = new FileOutputStream(file);
-          if (stream == null) return false;
-          byte[] buffer = new byte[4 * 1024];
-          int read;
-          while ((read = stream.read(buffer)) != -1) output.write(buffer, 0, read);
-          output.flush();
-          output.close();
-          stream.close();
-          return true;
-      } catch (FileNotFoundException e) {
-          e.printStackTrace();
-      } catch (IOException e) {
-          e.printStackTrace();
-      }
-      return false;
   }
 
   protected void onResume() {
