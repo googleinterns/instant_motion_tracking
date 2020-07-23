@@ -471,11 +471,6 @@ public class MainActivity extends AppCompatActivity {
     }
   }
 
-  // Opens the keyboard and sets focus to EditText
-  public void startGIFSelection(View view) {
-      openKeyboard();
-  }
-
   // Called once to popup the Keyboard via Android OS with focus set to editText
   public void openKeyboard() {
       editText.requestFocus();
