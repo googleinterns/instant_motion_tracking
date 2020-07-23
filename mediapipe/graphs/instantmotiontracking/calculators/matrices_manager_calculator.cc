@@ -126,7 +126,7 @@ class MatricesManagerCalculator : public CalculatorBase {
         return 0.75f;
       }
       else if(render_id == 2) { // GIF
-        return 0.15f;
+        return 160.0f;
       }
     }
 };

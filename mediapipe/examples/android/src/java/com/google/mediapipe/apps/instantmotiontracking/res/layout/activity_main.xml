@@ -6,6 +6,23 @@
     android:layout_height="match_parent"
     android:id="@+id/constraint_layout">
 
+    <com.google.mediapipe.apps.instantmotiontracking.GIFEditText
+        android:id="@+id/gif_edit_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="0dp"
+        android:background="@null"
+        android:gravity="center"
+        android:hint=""
+        android:text=""
+        android:padding="10dp"
+        android:textColorHint="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <FrameLayout
         android:id="@+id/preview_display_layout"
         android:layout_width="fill_parent"
@@ -28,5 +45,5 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"/>
-        
+
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -24,8 +24,12 @@ import com.google.protobuf.*;
 // determines what object model to render for this unique sticker).
 
 public class Sticker {
-  public static int TOTAL_NUM_ASSETS = 3; // Total number of different types of
+  public static final int TOTAL_NUM_ASSETS = 3; // Total number of different types of
   // objects that can be rendered
+  // Access key integers for each object render ID
+  public static final int ROBOT = 0;
+  public static final int DINO = 1;
+  public static final int GIF = 2;
 
   private int renderID = 0; // ID of object to render
 

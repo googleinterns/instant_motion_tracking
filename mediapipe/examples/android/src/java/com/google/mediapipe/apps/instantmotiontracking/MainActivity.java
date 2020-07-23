@@ -14,6 +14,8 @@
 
 package com.google.mediapipe.apps.instantmotiontracking;
 
+import android.content.ClipDescription;
+import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -24,9 +26,11 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Size;
+import android.view.inputmethod.InputMethodManager;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -51,7 +55,12 @@ import com.google.mediapipe.framework.AndroidAssetUtil;
 import com.google.mediapipe.framework.AndroidPacketCreator;
 import com.google.mediapipe.framework.Packet;
 import com.google.mediapipe.glutil.EglManager;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -130,6 +139,7 @@ public class MainActivity extends AppCompatActivity {
   private static final String DINO_TEXTURE_TAG = "dino_texture";
   private static final String DINO_ASSET_TAG = "dino_asset_name";
   // All GIF animation assets and tags
+  private GIFEditText editText;
   private static final String GOOFY_TEST_GIF =
     "http://media.tenor.com/images/bce26b3402f8c22452fb648ee2276ff2/tenor.gif";
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
@@ -148,6 +158,18 @@ public class MainActivity extends AppCompatActivity {
 
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
+
+    editText = findViewById(R.id.gif_edit_text);
+    editText.setOnRichContentListener(new GIFEditText.OnRichContentListener() {
+        @Override
+        public void onRichContent(Uri contentUri, ClipDescription description) {
+            File rcf = new File(getFilesDir(), System.currentTimeMillis() + ".gif");
+            if (writeToFileFromContentUri(rcf, contentUri)) {
+                setGIFBitmaps("file://" + rcf.getAbsolutePath());
+            }
+            closeKeyboard();
+        }
+    });
 
     try {
       applicationInfo =
@@ -339,10 +361,24 @@ public class MainActivity extends AppCompatActivity {
                 refreshUI();
             }
         });
-
         buttonLayout.addView(deleteSticker);
         buttonLayout.addView(goBack);
         buttonLayout.addView(loopRender);
+
+        // Add the GIF search option if current sticker is GIF
+        if(currentSticker.getRenderAssetID() == Sticker.GIF) {
+          ImageButton gifSearch = new ImageButton(this);
+          setUIControlButtonDesign(gifSearch, R.drawable.baseline_search_24);
+          gifSearch.setOnClickListener(new View.OnClickListener() {
+              public void onClick(View v) {
+                // Clear the text field to prevent text artifacts in GIF selection
+                editText.setText("");
+                // Open the Keyboard to allow user input
+                openKeyboard();
+              }
+          });
+          buttonLayout.addView(gifSearch);
+        }
     }
     else {
         buttonLayout.removeAllViews();
@@ -355,13 +391,13 @@ public class MainActivity extends AppCompatActivity {
                     refreshUI();
                 }
             });
-            if(sticker.getRenderAssetID() == 0) { // robot
+            if(sticker.getRenderAssetID() == Sticker.ROBOT) {
               setStickerButtonDesign(stickerButton, R.drawable.robot);
             }
-            else if(sticker.getRenderAssetID() == 1) { // dino
+            else if(sticker.getRenderAssetID() == Sticker.DINO) {
               setStickerButtonDesign(stickerButton, R.drawable.dino);
             }
-            else if(sticker.getRenderAssetID() == 2) { // GIF
+            else if(sticker.getRenderAssetID() == Sticker.GIF) {
               setUIControlButtonDesign(stickerButton, R.drawable.baseline_gif_24);
             }
 
@@ -399,6 +435,7 @@ public class MainActivity extends AppCompatActivity {
   }
 
   public void setGIFBitmaps(String gif_url) {
+    GIFBitmaps = new ArrayList<Bitmap>(); // Empty the bitmap array
     Glide.with(this).asGif().load(gif_url).into(new SimpleTarget<GifDrawable>() {
       @Override
       public void onResourceReady(GifDrawable resource, Transition<? super GifDrawable> transition) {
@@ -432,6 +469,48 @@ public class MainActivity extends AppCompatActivity {
       // Cycle through every possible frame
       gifCurrentIndex = (gifCurrentIndex + 1) % GIFBitmaps.size();
     }
+  }
+
+  // Opens the keyboard and sets focus to EditText
+  public void startGIFSelection(View view) {
+      openKeyboard();
+  }
+
+  // Called once to popup the Keyboard via Android OS with focus set to editText
+  public void openKeyboard() {
+      editText.requestFocus();
+      InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+      imm.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT);
+  }
+
+  // Called once to close the Keyboard via Android OS
+  public void closeKeyboard() {
+      View view = this.getCurrentFocus();
+      if (view != null) {
+          InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+          imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+      }
+  }
+
+  public boolean writeToFileFromContentUri(File file, Uri uri) {
+      if (file == null || uri == null) return false;
+      try {
+          InputStream stream = getContentResolver().openInputStream(uri);
+          OutputStream output = new FileOutputStream(file);
+          if (stream == null) return false;
+          byte[] buffer = new byte[4 * 1024];
+          int read;
+          while ((read = stream.read(buffer)) != -1) output.write(buffer, 0, read);
+          output.flush();
+          output.close();
+          stream.close();
+          return true;
+      } catch (FileNotFoundException e) {
+          e.printStackTrace();
+      } catch (IOException e) {
+          e.printStackTrace();
+      }
+      return false;
   }
 
   protected void onResume() {
