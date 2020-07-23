@@ -647,7 +647,9 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     uniform sampler2D texture;  // texture to shade with
 
     void main() {
-      gl_FragColor = texture2D(texture, sample_coordinate);
+      vec4 pixel = texture2D(texture, sample_coordinate);
+      if (pixel.a < 0.2) discard;
+      gl_FragColor = pixel;
     }
   )";
 

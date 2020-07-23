@@ -39,6 +39,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ImageView;
@@ -453,7 +454,12 @@ public class MainActivity extends AppCompatActivity {
           StandardGifDecoder GIFDecoder = (StandardGifDecoder) decoder.get(frameLoader);
           for (int i = 0; i < GIFDecoder.getFrameCount(); i++) {
             GIFDecoder.advance();
-            GIFBitmaps.add(GIFDecoder.getNextFrame());
+            Bitmap bmp = GIFDecoder.getNextFrame();
+            // Bitmaps must be flipped due to native acquisition of frames from Android OS
+            Matrix matrix = new Matrix();
+            matrix.preScale(-1.0f, 1.0f);
+            GIFBitmaps.add(Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(),
+              bmp.getHeight(), matrix, true));
           }
         }
         catch (Exception e) {
