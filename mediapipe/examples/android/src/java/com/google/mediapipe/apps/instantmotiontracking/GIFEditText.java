@@ -19,7 +19,6 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
@@ -28,14 +27,9 @@ import androidx.core.view.inputmethod.EditorInfoCompat;
 import androidx.core.view.inputmethod.InputConnectionCompat;
 import androidx.core.view.inputmethod.InputContentInfoCompat;
 
-import static android.os.Build.VERSION.SDK_INT;
-import static android.os.Build.VERSION_CODES.N_MR1;
-
 public class GIFEditText extends AppCompatEditText {
 
-  private OnRichContentListener onRichContentListener = null;
-  private String[] mimeTypes = {};
-  public boolean runListenerInBackground = true;
+    private OnGIFCommit onGIFCommit;
 
     public GIFEditText(Context context) {
         super(context);
@@ -43,62 +37,43 @@ public class GIFEditText extends AppCompatEditText {
 
     public GIFEditText(Context context, AttributeSet attrs) {
         super(context, attrs);
-        setAttributes(context, attrs);
     }
 
-    public GIFEditText(Context context, AttributeSet attrs, int defStyleAttr) {
-        super(context, attrs, defStyleAttr);
-        setAttributes(context, attrs);
+    public interface OnGIFCommit {
+        void OnGIFCommit(Uri contentUri, ClipDescription description);
     }
 
-    private void setAttributes(Context context, AttributeSet attrs) {
-        this.mimeTypes = (new String[]{"image/gif"});
-    }
-
-    public interface OnRichContentListener {
-
-        void onRichContent(Uri contentUri, ClipDescription description);
-    }
-
-    public void setOnRichContentListener(OnRichContentListener onRichContentListener) {
-        this.onRichContentListener = onRichContentListener;
-    }
-
-    public String[] getContentMimeTypes() {
-        return mimeTypes;
+    public void setGIFListener(OnGIFCommit onGIFCommit) {
+        this.onGIFCommit = onGIFCommit;
     }
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo editorInfo) {
-        final InputConnection ic = super.onCreateInputConnection(editorInfo);
-        EditorInfoCompat.setContentMimeTypes(editorInfo, getContentMimeTypes());
-        return InputConnectionCompat.createWrapper(ic, editorInfo,
+        final InputConnection inputConnection = super.onCreateInputConnection(editorInfo);
+        EditorInfoCompat.setContentMimeTypes(editorInfo, new String[]{"image/gif"});
+        return InputConnectionCompat.createWrapper(inputConnection, editorInfo,
                 new InputConnectionCompat.OnCommitContentListener() {
                     @Override
                     public boolean onCommitContent(final InputContentInfoCompat inputContentInfo,
                                                    int flags, Bundle opts) {
-                        if (SDK_INT >= N_MR1 && (flags & InputConnectionCompat
-                                .INPUT_CONTENT_GRANT_READ_URI_PERMISSION) != 0) {
                             try {
-                                if (onRichContentListener != null) {
+                                if (onGIFCommit != null) {
                                     Runnable runnable = new Runnable() {
                                         @Override
                                         public void run() {
                                             inputContentInfo.requestPermission();
-                                            onRichContentListener.onRichContent(
+                                            onGIFCommit.OnGIFCommit(
                                                     inputContentInfo.getContentUri(),
                                                     inputContentInfo.getDescription());
                                             inputContentInfo.releasePermission();
                                         }
                                     };
-                                    if (runListenerInBackground) new Thread(runnable).start();
-                                    else runnable.run();
+                                    new Thread(runnable).start();
                                 }
                             } catch (Exception e) {
                                 e.printStackTrace();
                                 return false;
                             }
-                        }
                         return true;
                     }
                 });

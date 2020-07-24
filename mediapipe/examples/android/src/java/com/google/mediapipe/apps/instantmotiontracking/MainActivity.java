@@ -162,9 +162,9 @@ public class MainActivity extends AppCompatActivity {
     setContentView(R.layout.activity_main);
 
     editText = findViewById(R.id.gif_edit_text);
-    editText.setOnRichContentListener(new GIFEditText.OnRichContentListener() {
+    editText.setGIFListener(new GIFEditText.OnGIFCommit() {
         @Override
-        public void onRichContent(Uri contentUri, ClipDescription description) {
+        public void OnGIFCommit(Uri contentUri, ClipDescription description) {
           // The application must have permission to access the GIF content URI
           grantUriPermission("com.google.mediapipe.apps.instantmotiontracking",
             contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
