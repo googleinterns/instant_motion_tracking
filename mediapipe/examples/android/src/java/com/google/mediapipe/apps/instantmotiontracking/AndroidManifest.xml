@@ -9,9 +9,6 @@
   <!-- For using the camera -->
   <uses-permission android:name="android.permission.CAMERA" />
   <uses-feature android:name="android.hardware.camera" />
-  <!-- For using the internet (GIF acquisition) -->
-  <uses-permission android:name="android.permission.INTERNET" />
-  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
 
   <application
       android:allowBackup="true"

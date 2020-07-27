@@ -647,8 +647,14 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     uniform sampler2D texture;  // texture to shade with
 
     void main() {
+      // Define a pixel in rgba space (must be non-constant as component of texture)
       vec4 pixel = texture2D(texture, sample_coordinate);
+
+      // If the alpha (background) value is near transparent, then discard the
+      // pixel, this allows the rendering of transparent background GIFs
       if (pixel.a < 0.2) discard;
+
+      // Set the fragment color to the transformed pixel
       gl_FragColor = pixel;
     }
   )";

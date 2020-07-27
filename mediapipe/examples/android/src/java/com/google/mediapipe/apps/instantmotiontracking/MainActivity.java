@@ -476,7 +476,7 @@ public class MainActivity extends AppCompatActivity {
       // Update GIF timestamp
       gifLastFrameUpdateMS = System.currentTimeMillis();
       // Cycle through every possible frame and avoid a divide by 0
-      gifCurrentIndex = (gifCurrentIndex + 1) % ((GIFBitmaps.size() > 0)?(GIFBitmaps.size()):(1));
+      gifCurrentIndex = (gifCurrentIndex + 1) % ((GIFBitmaps.size() > 0) ? (GIFBitmaps.size()) : (1));
     }
   }
 
