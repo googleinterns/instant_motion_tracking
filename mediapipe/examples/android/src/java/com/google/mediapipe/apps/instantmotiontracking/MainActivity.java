@@ -162,9 +162,9 @@ public class MainActivity extends AppCompatActivity {
     setContentView(R.layout.activity_main);
 
     editText = findViewById(R.id.gif_edit_text);
-    editText.setGIFListener(new GIFEditText.OnGIFCommit() {
+    editText.setGIFCommitListener(new GIFEditText.GIFCommitListener() {
         @Override
-        public void OnGIFCommit(Uri contentUri, ClipDescription description) {
+        public void GIFCommitListener(Uri contentUri, ClipDescription description) {
           // The application must have permission to access the GIF content URI
           grantUriPermission("com.google.mediapipe.apps.instantmotiontracking",
             contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -361,7 +361,7 @@ public class MainActivity extends AppCompatActivity {
         setUIControlButtonDesign(loopRender, R.drawable.baseline_loop_24);
         loopRender.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                currentSticker.loopAssetID();
+                currentSticker.setRender(currentSticker.getRender().iterate());
                 refreshUI();
             }
         });
@@ -370,7 +370,7 @@ public class MainActivity extends AppCompatActivity {
         buttonLayout.addView(loopRender);
 
         // Add the GIF search option if current sticker is GIF
-        if(currentSticker.getRenderAssetID() == Sticker.GIF) {
+        if(currentSticker.getRender() == Sticker.Render.GIF) {
           ImageButton gifSearch = new ImageButton(this);
           setUIControlButtonDesign(gifSearch, R.drawable.baseline_search_24);
           gifSearch.setOnClickListener(new View.OnClickListener() {
@@ -395,13 +395,13 @@ public class MainActivity extends AppCompatActivity {
                     refreshUI();
                 }
             });
-            if(sticker.getRenderAssetID() == Sticker.ROBOT) {
+            if(sticker.getRender() == Sticker.Render.ROBOT) {
               setStickerButtonDesign(stickerButton, R.drawable.robot);
             }
-            else if(sticker.getRenderAssetID() == Sticker.DINO) {
+            else if(sticker.getRender() == Sticker.Render.DINO) {
               setStickerButtonDesign(stickerButton, R.drawable.dino);
             }
-            else if(sticker.getRenderAssetID() == Sticker.GIF) {
+            else if(sticker.getRender() == Sticker.Render.GIF) {
               setUIControlButtonDesign(stickerButton, R.drawable.baseline_gif_24);
             }
 
@@ -476,7 +476,7 @@ public class MainActivity extends AppCompatActivity {
       // Update GIF timestamp
       gifLastFrameUpdateMS = System.currentTimeMillis();
       // Cycle through every possible frame and avoid a divide by 0
-      gifCurrentIndex = (gifCurrentIndex + 1) % ((GIFBitmaps.size() > 0) ? (GIFBitmaps.size()) : (1));
+      gifCurrentIndex = (GIFBitmaps.size() == 0) ? 1 : (gifCurrentIndex + 1) % GIFBitmaps.size();
     }
   }
 

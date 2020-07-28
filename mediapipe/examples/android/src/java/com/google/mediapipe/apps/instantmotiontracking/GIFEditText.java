@@ -19,6 +19,7 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
@@ -29,7 +30,7 @@ import androidx.core.view.inputmethod.InputContentInfoCompat;
 
 public class GIFEditText extends AppCompatEditText {
 
-    private OnGIFCommit onGIFCommit;
+    private GIFCommitListener gifCommitListener;
 
     public GIFEditText(Context context) {
         super(context);
@@ -39,43 +40,45 @@ public class GIFEditText extends AppCompatEditText {
         super(context, attrs);
     }
 
-    public interface OnGIFCommit {
-        void OnGIFCommit(Uri contentUri, ClipDescription description);
+    public interface GIFCommitListener {
+        void GIFCommitListener(Uri contentUri, ClipDescription description);
     }
 
-    public void setGIFListener(OnGIFCommit onGIFCommit) {
-        this.onGIFCommit = onGIFCommit;
+    public void setGIFCommitListener(GIFCommitListener gifCommitListener) {
+        this.gifCommitListener = gifCommitListener;
     }
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo editorInfo) {
-        final InputConnection inputConnection = super.onCreateInputConnection(editorInfo);
-        EditorInfoCompat.setContentMimeTypes(editorInfo, new String[]{"image/gif"});
-        return InputConnectionCompat.createWrapper(inputConnection, editorInfo,
-                new InputConnectionCompat.OnCommitContentListener() {
-                    @Override
-                    public boolean onCommitContent(final InputContentInfoCompat inputContentInfo,
-                                                   int flags, Bundle opts) {
-                            try {
-                                if (onGIFCommit != null) {
-                                    Runnable runnable = new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            inputContentInfo.requestPermission();
-                                            onGIFCommit.OnGIFCommit(
-                                                    inputContentInfo.getContentUri(),
-                                                    inputContentInfo.getDescription());
-                                            inputContentInfo.releasePermission();
-                                        }
-                                    };
-                                    new Thread(runnable).start();
-                                }
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                                return false;
-                            }
-                        return true;
-                    }
-                });
+      final InputConnection inputConnection = super.onCreateInputConnection(editorInfo);
+      EditorInfoCompat.setContentMimeTypes(editorInfo, new String[]{"image/gif"});
+      return InputConnectionCompat.createWrapper(inputConnection, editorInfo,
+          new InputConnectionCompat.OnCommitContentListener() {
+        @Override
+        public boolean onCommitContent(final InputContentInfoCompat inputContentInfo,
+            int flags, Bundle opts) {
+          try {
+            if (gifCommitListener != null) {
+              Runnable runnable = new Runnable() {
+                @Override
+                public void run() {
+                  inputContentInfo.requestPermission();
+                  gifCommitListener.GIFCommitListener(
+                  inputContentInfo.getContentUri(),
+                  inputContentInfo.getDescription());
+                  inputContentInfo.releasePermission();
+                }
+              };
+              new Thread(runnable).start();
+            }
+          }
+          catch (Exception e) {
+            Log.e("GIFEditText", "Input connection to GIF selection failed");
+            e.printStackTrace();
+            return false;
+          }
+          return true;
+        }
+      });
     }
 }

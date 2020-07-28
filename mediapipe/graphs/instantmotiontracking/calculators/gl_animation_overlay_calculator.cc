@@ -647,7 +647,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     uniform sampler2D texture;  // texture to shade with
 
     void main() {
-      // Define a pixel in rgba space (must be non-constant as component of texture)
+      // Sample the texture, retrieving an rgba pixel value
       vec4 pixel = texture2D(texture, sample_coordinate);
 
       // If the alpha (background) value is near transparent, then discard the
