@@ -14,6 +14,9 @@
 
 package com.google.mediapipe.apps.instantmotiontracking;
 
+import android.content.ClipDescription;
+import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -24,9 +27,11 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Size;
+import android.view.inputmethod.InputMethodManager;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -34,6 +39,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ImageView;
@@ -51,7 +57,12 @@ import com.google.mediapipe.framework.AndroidAssetUtil;
 import com.google.mediapipe.framework.AndroidPacketCreator;
 import com.google.mediapipe.framework.Packet;
 import com.google.mediapipe.glutil.EglManager;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -130,6 +141,7 @@ public class MainActivity extends AppCompatActivity {
   private static final String DINO_TEXTURE_TAG = "dino_texture";
   private static final String DINO_ASSET_TAG = "dino_asset_name";
   // All GIF animation assets and tags
+  private GIFEditText editText;
   private static final String GOOFY_TEST_GIF =
     "http://media.tenor.com/images/bce26b3402f8c22452fb648ee2276ff2/tenor.gif";
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
@@ -148,6 +160,20 @@ public class MainActivity extends AppCompatActivity {
 
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
+
+    editText = findViewById(R.id.gif_edit_text);
+    editText.setGIFCommitListener(new GIFEditText.GIFCommitListener() {
+        @Override
+        public void GIFCommitListener(Uri contentUri, ClipDescription description) {
+          // The application must have permission to access the GIF content URI
+          grantUriPermission("com.google.mediapipe.apps.instantmotiontracking",
+            contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+          // Set GIF frames from content URI
+          setGIFBitmaps(contentUri.toString());
+          // Close the keyboard upon GIF acquisition
+          closeKeyboard();
+        }
+    });
 
     try {
       applicationInfo =
@@ -335,14 +361,28 @@ public class MainActivity extends AppCompatActivity {
         setUIControlButtonDesign(loopRender, R.drawable.baseline_loop_24);
         loopRender.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                currentSticker.loopAssetID();
+                currentSticker.setRender(currentSticker.getRender().iterate());
                 refreshUI();
             }
         });
-
         buttonLayout.addView(deleteSticker);
         buttonLayout.addView(goBack);
         buttonLayout.addView(loopRender);
+
+        // Add the GIF search option if current sticker is GIF
+        if(currentSticker.getRender() == Sticker.Render.GIF) {
+          ImageButton gifSearch = new ImageButton(this);
+          setUIControlButtonDesign(gifSearch, R.drawable.baseline_search_24);
+          gifSearch.setOnClickListener(new View.OnClickListener() {
+              public void onClick(View v) {
+                // Clear the text field to prevent text artifacts in GIF selection
+                editText.setText("");
+                // Open the Keyboard to allow user input
+                openKeyboard();
+              }
+          });
+          buttonLayout.addView(gifSearch);
+        }
     }
     else {
         buttonLayout.removeAllViews();
@@ -355,13 +395,13 @@ public class MainActivity extends AppCompatActivity {
                     refreshUI();
                 }
             });
-            if(sticker.getRenderAssetID() == 0) { // robot
+            if(sticker.getRender() == Sticker.Render.ROBOT) {
               setStickerButtonDesign(stickerButton, R.drawable.robot);
             }
-            else if(sticker.getRenderAssetID() == 1) { // dino
+            else if(sticker.getRender() == Sticker.Render.DINO) {
               setStickerButtonDesign(stickerButton, R.drawable.dino);
             }
-            else if(sticker.getRenderAssetID() == 2) { // GIF
+            else if(sticker.getRender() == Sticker.Render.GIF) {
               setUIControlButtonDesign(stickerButton, R.drawable.baseline_gif_24);
             }
 
@@ -399,6 +439,7 @@ public class MainActivity extends AppCompatActivity {
   }
 
   public void setGIFBitmaps(String gif_url) {
+    GIFBitmaps = new ArrayList<Bitmap>(); // Empty the bitmap array
     Glide.with(this).asGif().load(gif_url).into(new SimpleTarget<GifDrawable>() {
       @Override
       public void onResourceReady(GifDrawable resource, Transition<? super GifDrawable> transition) {
@@ -413,7 +454,12 @@ public class MainActivity extends AppCompatActivity {
           StandardGifDecoder GIFDecoder = (StandardGifDecoder) decoder.get(frameLoader);
           for (int i = 0; i < GIFDecoder.getFrameCount(); i++) {
             GIFDecoder.advance();
-            GIFBitmaps.add(GIFDecoder.getNextFrame());
+            Bitmap bmp = GIFDecoder.getNextFrame();
+            // Bitmaps must be flipped due to native acquisition of frames from Android OS
+            Matrix matrix = new Matrix();
+            matrix.preScale(-1.0f, 1.0f);
+            GIFBitmaps.add(Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(),
+              bmp.getHeight(), matrix, true));
           }
         }
         catch (Exception e) {
@@ -429,9 +475,25 @@ public class MainActivity extends AppCompatActivity {
     if(System.currentTimeMillis() - gifLastFrameUpdateMS >= millisPerFrame) {
       // Update GIF timestamp
       gifLastFrameUpdateMS = System.currentTimeMillis();
-      // Cycle through every possible frame
-      gifCurrentIndex = (gifCurrentIndex + 1) % GIFBitmaps.size();
+      // Cycle through every possible frame and avoid a divide by 0
+      gifCurrentIndex = (GIFBitmaps.size() == 0) ? 1 : (gifCurrentIndex + 1) % GIFBitmaps.size();
     }
+  }
+
+  // Called once to popup the Keyboard via Android OS with focus set to editText
+  public void openKeyboard() {
+      editText.requestFocus();
+      InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+      imm.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT);
+  }
+
+  // Called once to close the Keyboard via Android OS
+  public void closeKeyboard() {
+      View view = this.getCurrentFocus();
+      if (view != null) {
+          InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+          imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+      }
   }
 
   protected void onResume() {

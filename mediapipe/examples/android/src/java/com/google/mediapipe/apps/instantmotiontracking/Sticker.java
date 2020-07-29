@@ -24,30 +24,45 @@ import com.google.protobuf.*;
 // determines what object model to render for this unique sticker).
 
 public class Sticker {
-  public static int TOTAL_NUM_ASSETS = 3; // Total number of different types of
-  // objects that can be rendered
 
-  private int renderID = 0; // ID of object to render
+  public enum Render {
+    // Every possible render for a sticker object
+    ROBOT, DINO, GIF;
+    // Loop through each possible render object
+    public Render iterate() {
+      int newEnumIdx = (this.ordinal() + 1) % Render.values().length;
+      return Render.values()[newEnumIdx];
+   }
+  }
 
-  private float xAnchor, yAnchor; // Normalized X and Y coordinates of anchor
+  // Current render of the sticker object
+  private Render currentRender;
+
+  // Normalized X and Y coordinates of anchor
   // (0,0) lies at top-left corner of screen
   // (1.0,1.0) lies at bottom-right corner of screen
+  private float xAnchor, yAnchor;
 
-  private float userRotation = 0f; // Rotation in radians from user
-  private float userScalingFactor = 1f; // Scaling factor as defined by user (defaults to 1.0)
+  // Rotation in radians from user
+  private float userRotation = 0f;
+  // Scaling factor as defined by user (defaults to 1.0)
+  private float userScalingFactor = 1f;
 
-  private int stickerID; // Unique sticker integer ID
+  // Unique sticker integer ID
+  private int stickerID;
 
-  private static int globalIDLimit = 1; // Used to determine next stickerID
+  // Used to determine next stickerID
+  private static int globalIDLimit = 1;
 
   public Sticker() {
-    this.renderID = 0;
+    // Every sticker will have a default render of the robot animation
+    this.currentRender = Render.ROBOT;
     stickerID = (Sticker.globalIDLimit++);
   }
 
   /** Sets a new asset rendering ID as defined by Mediapipe graph. * */
-  public Sticker(int renderID) {
-    this.renderID = renderID;
+  public Sticker(Render render) {
+    this.currentRender = render;
     stickerID = (Sticker.globalIDLimit++);
   }
 
@@ -67,23 +82,13 @@ public class Sticker {
     return new float[] {xAnchor, yAnchor};
   }
 
-  /** Returns render asset ID used by Mediapipe graph. * */
-  public int getRenderAssetID() {
-    return renderID;
+  /** Returns render asset used by Mediapipe graph. * */
+  public Render getRender() {
+    return currentRender;
   }
 
-  public void setRenderAssetID(int newRenderID) {
-    this.renderID = newRenderID;
-  }
-
-  /** Increments/Loops the render ID in order to change the object in scene **/
-  public void loopAssetID() {
-    if(getRenderAssetID() >= TOTAL_NUM_ASSETS - 1) {
-      setRenderAssetID(0);
-    }
-    else {
-      setRenderAssetID(getRenderAssetID() + 1);
-    }
+  public void setRender(Render render) {
+    this.currentRender = render;
   }
 
   /** Sets new user input of y-axis rotation (objective rotation, does not increment). * */
@@ -122,7 +127,7 @@ public class Sticker {
       .setY(sticker.getAnchor()[1])
       .setRotation(sticker.getRotation())
       .setScale(sticker.getScaleFactor())
-      .setRenderID(sticker.renderID).build();
+      .setRenderID(sticker.getRender().ordinal()).build();
       stickerRollBuilder.addSticker(protoSticker);
     }
     return stickerRollBuilder.build();

@@ -17,6 +17,7 @@ android_library(
         "//third_party:androidx_constraint_layout",
         "//third_party:opencv",
         "@maven//:androidx_concurrent_concurrent_futures",
+        "@maven//:androidx_core_core",
         "@maven//:com_google_guava_guava",
         "@maven//:com_github_bumptech_glide_glide",
         "@maven//:com_github_bumptech_glide_gifdecoder",
