@@ -63,9 +63,8 @@ public class GIFEditText extends AppCompatEditText {
                 @Override
                 public void run() {
                   inputContentInfo.requestPermission();
-                  gifCommitListener.GIFCommitListener(
-                  inputContentInfo.getContentUri(),
-                  inputContentInfo.getDescription());
+                  gifCommitListener.GIFCommitListener(inputContentInfo.getContentUri(),
+                                                      inputContentInfo.getDescription());
                   inputContentInfo.releasePermission();
                 }
               };
