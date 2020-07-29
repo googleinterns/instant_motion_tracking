@@ -47,7 +47,7 @@ typedef ImageFrame AssetTextureFormat;
 typedef GpuBuffer AssetTextureFormat;
 #endif
 
-enum { ATTRIB_VERTEX, ATTRIB_TEXTURE_POSITION, NUM_ATTRIBUTES };
+enum { ATTRIB_VERTEX, ATTRIB_TEXTURE_POSITION, ATTRIB_NORMAL, NUM_ATTRIBUTES };
 static const int kNumMatrixEntries = 16;
 // Loads a texture from an input side packet, and streams in an animation file
 // from a filename given in another input side packet, and renders the animation
@@ -93,6 +93,7 @@ static const int kNumMatrixEntries = 16;
 
 struct TriangleMesh {
   int index_count = 0;  // Needed for glDrawElements rendering call
+  std::unique_ptr<float[]> normals = nullptr;
   std::unique_ptr<float[]> vertices = nullptr;
   std::unique_ptr<float[]> texture_coords = nullptr;
   std::unique_ptr<int16[]> triangle_indices = nullptr;
@@ -582,8 +583,9 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     }
 
     // Disable vertex attributes
-    GLCHECK(glEnableVertexAttribArray(ATTRIB_VERTEX));
-    GLCHECK(glEnableVertexAttribArray(ATTRIB_TEXTURE_POSITION));
+    GLCHECK(glDisableVertexAttribArray(ATTRIB_VERTEX));
+    GLCHECK(glDisableVertexAttribArray(ATTRIB_TEXTURE_POSITION));
+    GLCHECK(glDisableVertexAttribArray(ATTRIB_NORMAL));
 
     // Disable depth test
     GLCHECK(glDisable(GL_DEPTH_TEST));
@@ -611,10 +613,12 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
   const GLint attr_location[NUM_ATTRIBUTES] = {
       ATTRIB_VERTEX,
       ATTRIB_TEXTURE_POSITION,
+      ATTRIB_NORMAL,
   };
   const GLchar *attr_name[NUM_ATTRIBUTES] = {
       "position",
       "texture_coordinate",
+      "normal",
   };
 
   const GLchar *vert_src = R"(
@@ -626,36 +630,59 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
 
     // vertex position in threespace
     attribute vec4 position;
+    attribute vec4 normal;
 
     // texture coordinate for each vertex in normalized texture space (0..1)
     attribute mediump vec4 texture_coordinate;
 
     // texture coordinate for fragment shader (will be interpolated)
-    varying mediump vec2 sample_coordinate;
+    varying mediump vec3 sample_coordinate;
+    varying mediump vec3 vNormal;
 
     void main() {
-      sample_coordinate = texture_coordinate.xy;
+      sample_coordinate = texture_coordinate.xyz;
       mat4 mvpMatrix = perspectiveMatrix * modelMatrix;
       gl_Position = mvpMatrix * position;
+
+      vec4 tmpNormal = mvpMatrix * normal;
+      vNormal = normalize(tmpNormal.xyz);
     }
   )";
 
   const GLchar *frag_src = R"(
     precision mediump float;
 
-    varying vec2 sample_coordinate;  // texture coordinate (0..1)
+    varying vec3 sample_coordinate;  // texture coordinate (0..1)
+    varying vec3 vNormal;
     uniform sampler2D texture;  // texture to shade with
+
+    const vec3 lightPos = vec3(1.0,1.0,1.0);
+    const vec3 ambient = vec3(0.95);
+    const vec3 testNormal = vec3(0.5);
 
     void main() {
       // Sample the texture, retrieving an rgba pixel value
-      vec4 pixel = texture2D(texture, sample_coordinate);
+      vec4 pixel = texture2D(texture, sample_coordinate.xy);
+
+      // Get pixel position
+      vec3 specular = vec3(1.0);
+      vec3 vertPos = sample_coordinate.xyz;
+      vec3 lightDir = normalize(lightPos - vertPos);
+      float lambertian = max(dot(lightDir,testNormal), 0.0);
+      if(lambertian > 0.0) {
+        vec3 viewDir = normalize(-vertPos);
+        // blinn-phong effect
+        vec3 halfDir = normalize(lightDir + viewDir);
+        float specAngle = max(dot(halfDir, testNormal), 0.0);
+        specular = specular * pow(specAngle, 16.0);
+      }
 
       // If the alpha (background) value is near transparent, then discard the
       // pixel, this allows the rendering of transparent background GIFs
       if (pixel.a < 0.2) discard;
 
       // Set the fragment color to the transformed pixel
-      gl_FragColor = pixel;
+      gl_FragColor = vec4(ambient * lambertian * pixel.rgb + specular, 1.0);
     }
   )";
 
@@ -689,9 +716,15 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
   GLCHECK(glVertexAttribPointer(ATTRIB_VERTEX, 3, GL_FLOAT, 0, 0,
                                 triangle_mesh.vertices.get()));
   GLCHECK(glEnableVertexAttribArray(ATTRIB_VERTEX));
+
   GLCHECK(glVertexAttribPointer(ATTRIB_TEXTURE_POSITION, 2, GL_FLOAT, 0, 0,
                                 triangle_mesh.texture_coords.get()));
   GLCHECK(glEnableVertexAttribArray(ATTRIB_TEXTURE_POSITION));
+
+  GLCHECK(glVertexAttribPointer(ATTRIB_NORMAL, 3, GL_FLOAT, 0, 0,
+                                triangle_mesh.normals.get()));
+  GLCHECK(glEnableVertexAttribArray(ATTRIB_NORMAL));
+
   GLCHECK(glActiveTexture(GL_TEXTURE1));
   GLCHECK(glBindTexture(texture.target(), texture.name()));
 
