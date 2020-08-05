@@ -733,19 +733,19 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       vec3 pixelRGB = pixel.rgb;
 
       // Define lighting constants
-      const vec3 ambient = vec3(-0.1);
+      const vec3 ambient = vec3(-0.1, -0.1, -0.1);
       vec3 coordinate_position = sample_coordinate.xyz;
       vec3 lightPos = vec3(5.0,2.0,1.0);
       vec3 light_color = vec3(0.2);
-      vec3 light_direction = normalize(lightPos - coordinate_position);
+      vec3 light_direction = vec3(1.0, 1.0, -1.0); //normalize(lightPos - coordinate_position);
       vec3 view_direction = normalize(-coordinate_position);
 
       // Implementation of Directional Lighting
-    /*DirectionalLight directionLight;
+      DirectionalLight directionLight;
       directionLight.direction = light_direction;
-      directionLight.color = vec3(1.0);
+      directionLight.color = vec3(0.05);
       directionLight.exponent = 0.5;
-      vec3 lighting = GetDirectionalLight(coordinate_position, vNormal, view_direction, directionLight);*/
+      vec3 lighting = GetDirectionalLight(coordinate_position, vNormal, view_direction, directionLight);
 
       float lambertian = max(dot(light_direction, vNormal), 0.0);
       float specular = 0.0;
@@ -756,7 +756,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       specAngle = max(dot(reflectDir, view_direction), 0.0);
       specular = pow(specAngle, 4.0);
 
-      gl_FragColor = vec4(pixelRGB + specular * light_color, 1.0);
+      gl_FragColor = vec4(pixelRGB + ambient + lighting, 1.0);
     }
   )";
 

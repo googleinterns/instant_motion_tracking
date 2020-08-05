@@ -204,7 +204,7 @@ public class MainActivity extends AppCompatActivity {
     // Send loaded 3d render assets as side packets to graph
 
     // Load a basic GIF for initialization of GIF assets
-    setGIFBitmaps(GOOFY_TEST_GIF);
+    // setGIFBitmaps(GOOFY_TEST_GIF);
     prepareDemoAssets();
     AndroidPacketCreator packetCreator = processor.getPacketCreator();
 
@@ -257,7 +257,7 @@ public class MainActivity extends AppCompatActivity {
       });
     refreshUI();
   }
-  
+
   // Use MotionEvent properties to interpret taps/rotations/scales
   public boolean UITouchManager(MotionEvent event) {
     if(currentSticker != null) {
