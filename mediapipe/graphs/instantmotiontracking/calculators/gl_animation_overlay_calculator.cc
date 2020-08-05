@@ -27,6 +27,7 @@
 #include "mediapipe/graphs/object_detection_3d/calculators/camera_parameters.pb.h"
 #include "mediapipe/graphs/object_detection_3d/calculators/gl_animation_overlay_calculator.pb.h"
 #include "mediapipe/graphs/object_detection_3d/calculators/model_matrix.pb.h"
+#include <math.h>
 
 namespace mediapipe {
 
@@ -292,6 +293,43 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       LOG(ERROR) << "Failed to read vertices for frame " << frame_count_;
       return false;
     }
+
+    // Calculate normals of vertices using a centroid approach
+    // First step is to find the centroid C (an average of all vertices)
+    float centroid[3];
+    int vertices_len = sizeof(triangle_mesh.vertices)/sizeof(triangle_mesh.vertices[0]);
+    triangle_mesh.normals.reset(new float[vertices_len]);
+    float normals[vertices_len];
+    for (int i = 0; i < vertices_len; i += 3) {
+      centroid[0] += triangle_mesh.vertices[i];
+      centroid[1] += triangle_mesh.vertices[i+1];
+      centroid[2] += triangle_mesh.vertices[i+2];
+    }
+    centroid[0] /= (vertices_len/3);
+    centroid[1] /= (vertices_len/3);
+    centroid[2] /= (vertices_len/3);
+
+    // Second step is to calculate the normal for each vertex from centroid and normalize
+    for (int i = 0; i < vertices_len; i += 3) {
+      normals[i] = triangle_mesh.vertices[i] - centroid[0];
+      normals[i+1] = triangle_mesh.vertices[i+1] - centroid[1];
+      normals[i+2] = triangle_mesh.vertices[i+2] - centroid[2];
+
+      float product = 0.0;
+      // calculate dot product
+      product = product + normals[i] * normals[i];
+      product = product + normals[i+1] * normals[i+1];
+      product = product + normals[i+2] * normals[i+2];
+
+      float magnitude = sqrt(product);
+      normals[i] /= magnitude;
+      normals[i+1] /= magnitude;
+      normals[i+2] /= magnitude;
+    }
+    for (int i = 0; i < vertices_len; i++) {
+      triangle_mesh.normals.get()[i] = normals[i];
+    }
+
     // Try to read in texture coordinates (4-byte floats)
     triangle_mesh.texture_coords.reset(new float[lengths[1]]);
     if (!ReadBytesFromAsset(asset, (void *)triangle_mesh.texture_coords.get(),
@@ -630,7 +668,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
 
     // vertex position in threespace
     attribute vec4 position;
-    attribute vec4 normal;
+    attribute vec3 normal;
 
     // texture coordinate for each vertex in normalized texture space (0..1)
     attribute mediump vec4 texture_coordinate;
@@ -644,7 +682,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       mat4 mvpMatrix = perspectiveMatrix * modelMatrix;
       gl_Position = mvpMatrix * position;
 
-      vec4 tmpNormal = mvpMatrix * normal;
+      vec4 tmpNormal = mvpMatrix * vec4(normal, 1.0);
       vNormal = normalize(tmpNormal.xyz);
     }
   )";
@@ -656,33 +694,69 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     varying vec3 vNormal;
     uniform sampler2D texture;  // texture to shade with
 
-    const vec3 lightPos = vec3(1.0,1.0,1.0);
-    const vec3 ambient = vec3(0.95);
-    const vec3 testNormal = vec3(0.5);
+    float kPi = 3.14159265359;
+
+    struct DirectionalLight {
+      vec3 direction;
+      vec3 color;
+      float exponent;
+    };
+
+    vec3 GetDirectionalLight(vec3 pos, vec3 normal, vec3 view_dir, DirectionalLight light) {
+      // Intensity of the diffuse light. Saturate to keep within the 0-1 range.
+      float normal_dot_light_dir = dot(normal, -light.direction);
+      float intensity = clamp(normal_dot_light_dir, 0.0, 1.0);
+      // Calculate the diffuse light
+      vec3 diffuse = intensity * light.color;
+      // http://www.rorydriscoll.com/2009/01/25/energy-conservation-in-games/
+      float kEnergyConservation = (2.0 + light.exponent) / (2.0 * kPi);
+      vec3 reflect_dir = reflect(light.direction, normal);
+      // Intensity of the specular light
+      float view_dot_reflect = dot(-view_dir, reflect_dir);
+      // Use an epsilon for pow because pow(x,y) is undefined if x < 0 or x == 0
+      // and y <= 0 (GLSL Spec 8.2)
+      const float kEpsilon = 1e-5;
+      intensity = kEnergyConservation * pow(clamp(view_dot_reflect, kEpsilon, 1.0),
+        light.exponent);
+      // Specular color:
+      vec3 specular = intensity * light.color;
+      return diffuse + specular;
+    }
 
     void main() {
       // Sample the texture, retrieving an rgba pixel value
       vec4 pixel = texture2D(texture, sample_coordinate.xy);
-
-      // Get pixel position
-      vec3 specular = vec3(1.0);
-      vec3 vertPos = sample_coordinate.xyz;
-      vec3 lightDir = normalize(lightPos - vertPos);
-      float lambertian = max(dot(lightDir,testNormal), 0.0);
-      if(lambertian > 0.0) {
-        vec3 viewDir = normalize(-vertPos);
-        // blinn-phong effect
-        vec3 halfDir = normalize(lightDir + viewDir);
-        float specAngle = max(dot(halfDir, testNormal), 0.0);
-        specular = specular * pow(specAngle, 16.0);
-      }
-
       // If the alpha (background) value is near transparent, then discard the
       // pixel, this allows the rendering of transparent background GIFs
       if (pixel.a < 0.2) discard;
+      // Convert rgba to rgb
+      vec3 pixelRGB = pixel.rgb;
 
-      // Set the fragment color to the transformed pixel
-      gl_FragColor = vec4(ambient * lambertian * pixel.rgb + specular, 1.0);
+      // Define lighting constants
+      const vec3 ambient = vec3(-0.1);
+      vec3 coordinate_position = sample_coordinate.xyz;
+      vec3 lightPos = vec3(5.0,2.0,1.0);
+      vec3 light_color = vec3(0.2);
+      vec3 light_direction = normalize(lightPos - coordinate_position);
+      vec3 view_direction = normalize(-coordinate_position);
+
+      // Implementation of Directional Lighting
+    /*DirectionalLight directionLight;
+      directionLight.direction = light_direction;
+      directionLight.color = vec3(1.0);
+      directionLight.exponent = 0.5;
+      vec3 lighting = GetDirectionalLight(coordinate_position, vNormal, view_direction, directionLight);*/
+
+      float lambertian = max(dot(light_direction, vNormal), 0.0);
+      float specular = 0.0;
+      vec3 halfDir = normalize(light_direction + view_direction);
+      float specAngle = max(dot(halfDir, vNormal), 0.0);
+      specular = pow(specAngle, 16.0);
+      vec3 reflectDir = reflect(-light_direction, vNormal);
+      specAngle = max(dot(reflectDir, view_direction), 0.0);
+      specular = pow(specAngle, 4.0);
+
+      gl_FragColor = vec4(pixelRGB + specular * light_color, 1.0);
     }
   )";
 

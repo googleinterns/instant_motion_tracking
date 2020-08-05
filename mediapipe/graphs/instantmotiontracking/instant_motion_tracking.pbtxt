@@ -17,7 +17,7 @@
 # Images in/out of graph with sticker data and IMU information from device
 input_stream: "input_video"
 input_stream: "sticker_proto_string"
-input_stream: "imu_data"
+input_stream: "imu_matrix"
 input_stream: "gif_texture"
 output_stream: "output_video"
 
@@ -45,7 +45,7 @@ node {
 node {
   calculator: "MatricesManagerCalculator"
   input_stream: "ANCHORS:tracked_anchor_data"
-  input_stream: "IMU_DATA:imu_data"
+  input_stream: "IMU_MATRIX:imu_matrix"
   input_stream: "USER_ROTATIONS:user_rotation_data"
   input_stream: "USER_SCALINGS:user_scaling_data"
   input_stream: "RENDER_DATA:sticker_render_data"

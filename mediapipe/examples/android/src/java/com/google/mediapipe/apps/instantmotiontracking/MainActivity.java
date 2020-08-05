@@ -33,6 +33,7 @@ import android.util.Log;
 import android.util.Size;
 import android.view.inputmethod.InputMethodManager;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -121,10 +122,10 @@ public class MainActivity extends AppCompatActivity {
   private final String FOV_SIDE_PACKET_TAG = "vertical_fov_radians";
   private final String ASPECT_RATIO_SIDE_PACKET_TAG = "aspect_ratio";
 
-  private float[] imuData = new float[3]; // [roll,pitch,yaw]
+  private static final String IMU_MATRIX_TAG = "imu_matrix";
+  float[] rotationMatrix = new float[9];
 
   private static final String STICKER_PROTO_TAG = "sticker_proto_string";
-  private static final String IMU_DATA_TAG = "imu_data";
   // Assets for object rendering
   // All robot animation assets and tags
   // TODO: Grouping all tags and assets into a seperate structure
@@ -154,6 +155,7 @@ public class MainActivity extends AppCompatActivity {
   private static final String GIF_FILE = "gif.obj.uuu";
   private static final String GIF_TEXTURE_TAG = "gif_texture";
   private static final String GIF_ASSET_TAG = "gif_asset_name";
+  float[] oldIMUData = new float[3];
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -231,19 +233,18 @@ public class MainActivity extends AppCompatActivity {
 
     // TODO: Change to use ROTATION_VECTOR or non-deprecated IMU method
     SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-    List sensorList = sensorManager.getSensorList(Sensor.TYPE_ORIENTATION);
+    List sensorList = sensorManager.getSensorList(Sensor.TYPE_ROTATION_VECTOR);
     sensorManager.registerListener(new SensorEventListener() {
-
+      private float[] tmpMatrix = new float[9];
       public void onAccuracyChanged(Sensor sensor, int accuracy) {}
       // Update procedure on sensor adjustment (phone changes orientation)
       public void onSensorChanged(SensorEvent event) {
-        // All values must be negated in order to adjust the object orientations
-        // to match the phone movement (passed into MatricesManagerCalculator)
-        imuData[0] = -(float) Math.toRadians(event.values[0]);
-        imuData[1] = -(float) Math.toRadians(event.values[1]);
-        imuData[2] = -(float) Math.toRadians(event.values[2]);
+        // Get the Rotation Matrix from the Rotation Vector
+        SensorManager.getRotationMatrixFromVector(tmpMatrix, event.values);
+        // Remap the coordinate system for an AR application
+        SensorManager.remapCoordinateSystem(tmpMatrix, SensorManager.AXIS_MINUS_X, SensorManager.AXIS_Y, rotationMatrix);
       }
-    }, (Sensor) sensorList.get(0), SensorManager.SENSOR_DELAY_FASTEST);
+    }, (Sensor) sensorList.get(0), 1);
 
     // Mechanisms for zoom, pinch, rotation, tap gestures (Basic single object manipulation
     buttonLayout = (LinearLayout) findViewById(R.id.button_layout);
@@ -255,6 +256,29 @@ public class MainActivity extends AppCompatActivity {
         }
       });
     refreshUI();
+  }
+
+  private float processRoll(float roll) {
+    float ratio = (float)(Math.abs((Math.PI/2) - roll) /(Math.PI/2));
+    float abs_tolerance = (float)Math.toRadians(30);
+    if (roll >= -abs_tolerance && roll <= abs_tolerance)
+    return roll * ratio;
+    else
+        return roll;
+    }
+
+  private float angleRestriction(float angle){
+    while (angle >= Math.PI) angle -= 2 * Math.PI;
+    while (angle < -Math.PI) angle += 2 * Math.PI;
+    return angle;
+  }
+
+  private float filterEulerAngle(float rawOrientationAngle, float oldOrientationAngle){
+    final float a = 0.25f; // alpha
+    float diff = angleRestriction(rawOrientationAngle - oldOrientationAngle);
+    oldOrientationAngle += a*diff;
+    oldOrientationAngle = angleRestriction(oldOrientationAngle);
+    return oldOrientationAngle;
   }
 
   // Use MotionEvent properties to interpret taps/rotations/scales
@@ -627,11 +651,11 @@ public class MainActivity extends AppCompatActivity {
       // Initialize sticker data protobuffer packet information
       Packet stickerProtoDataPacket = processor.getPacketCreator().createSerializedProto(Sticker.getMessageLiteData(stickerArrayList));
       // Define and set the IMU sensory information float array
-      Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(imuData);
+      Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(rotationMatrix);
       // Communicate GIF textures (dynamic texturing) to graph
       Packet gifTexturePacket = processor.getPacketCreator().createRgbaImageFrame(currentGIFBitmap);
       processor.getGraph().addConsumablePacketToInputStream(STICKER_PROTO_TAG, stickerProtoDataPacket, timestamp);
-      processor.getGraph().addConsumablePacketToInputStream(IMU_DATA_TAG, imuDataPacket, timestamp);
+      processor.getGraph().addConsumablePacketToInputStream(IMU_MATRIX_TAG, imuDataPacket, timestamp);
       processor.getGraph().addConsumablePacketToInputStream(GIF_TEXTURE_TAG, gifTexturePacket, timestamp);
       stickerProtoDataPacket.release();
       imuDataPacket.release();
