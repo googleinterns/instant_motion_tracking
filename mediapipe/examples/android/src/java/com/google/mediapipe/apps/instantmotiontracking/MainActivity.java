@@ -123,6 +123,7 @@ public class MainActivity extends AppCompatActivity {
   private final String ASPECT_RATIO_SIDE_PACKET_TAG = "aspect_ratio";
 
   private static final String IMU_MATRIX_TAG = "imu_matrix";
+  private static final int SENSOR_SAMPLE_DELAY = SensorManager.SENSOR_DELAY_FASTEST;
   float[] rotationMatrix = new float[9];
 
   private static final String STICKER_PROTO_TAG = "sticker_proto_string";
@@ -155,7 +156,6 @@ public class MainActivity extends AppCompatActivity {
   private static final String GIF_FILE = "gif.obj.uuu";
   private static final String GIF_TEXTURE_TAG = "gif_texture";
   private static final String GIF_ASSET_TAG = "gif_asset_name";
-  float[] oldIMUData = new float[3];
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -244,7 +244,7 @@ public class MainActivity extends AppCompatActivity {
         // Remap the coordinate system for an AR application
         SensorManager.remapCoordinateSystem(tmpMatrix, SensorManager.AXIS_MINUS_X, SensorManager.AXIS_Y, rotationMatrix);
       }
-    }, (Sensor) sensorList.get(0), 1);
+    }, (Sensor) sensorList.get(0), SENSOR_SAMPLE_DELAY);
 
     // Mechanisms for zoom, pinch, rotation, tap gestures (Basic single object manipulation
     buttonLayout = (LinearLayout) findViewById(R.id.button_layout);
@@ -257,30 +257,7 @@ public class MainActivity extends AppCompatActivity {
       });
     refreshUI();
   }
-
-  private float processRoll(float roll) {
-    float ratio = (float)(Math.abs((Math.PI/2) - roll) /(Math.PI/2));
-    float abs_tolerance = (float)Math.toRadians(30);
-    if (roll >= -abs_tolerance && roll <= abs_tolerance)
-    return roll * ratio;
-    else
-        return roll;
-    }
-
-  private float angleRestriction(float angle){
-    while (angle >= Math.PI) angle -= 2 * Math.PI;
-    while (angle < -Math.PI) angle += 2 * Math.PI;
-    return angle;
-  }
-
-  private float filterEulerAngle(float rawOrientationAngle, float oldOrientationAngle){
-    final float a = 0.25f; // alpha
-    float diff = angleRestriction(rawOrientationAngle - oldOrientationAngle);
-    oldOrientationAngle += a*diff;
-    oldOrientationAngle = angleRestriction(oldOrientationAngle);
-    return oldOrientationAngle;
-  }
-
+  
   // Use MotionEvent properties to interpret taps/rotations/scales
   public boolean UITouchManager(MotionEvent event) {
     if(currentSticker != null) {
