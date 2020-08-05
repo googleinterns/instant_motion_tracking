@@ -144,8 +144,6 @@ public class MainActivity extends AppCompatActivity {
   private static final String DINO_ASSET_TAG = "dino_asset_name";
   // All GIF animation assets and tags
   private GIFEditText editText;
-  private static final String GOOFY_TEST_GIF =
-    "http://media.tenor.com/images/bce26b3402f8c22452fb648ee2276ff2/tenor.gif";
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
   private int gifCurrentIndex = 0;
   private static final int GIF_FRAME_RATE = 20; // 20 FPS
@@ -202,9 +200,6 @@ public class MainActivity extends AppCompatActivity {
     PermissionHelper.checkAndRequestCameraPermissions(this);
 
     // Send loaded 3d render assets as side packets to graph
-
-    // Load a basic GIF for initialization of GIF assets
-    // setGIFBitmaps(GOOFY_TEST_GIF);
     prepareDemoAssets();
     AndroidPacketCreator packetCreator = processor.getPacketCreator();
 
@@ -241,7 +236,7 @@ public class MainActivity extends AppCompatActivity {
       public void onSensorChanged(SensorEvent event) {
         // Get the Rotation Matrix from the Rotation Vector
         SensorManager.getRotationMatrixFromVector(tmpMatrix, event.values);
-        // Remap the coordinate system for an AR application
+        // System is flipped on Z-axis, therefore, AXIS_MINUS_X is used to remap accordingly
         SensorManager.remapCoordinateSystem(tmpMatrix, SensorManager.AXIS_MINUS_X, SensorManager.AXIS_Y, rotationMatrix);
       }
     }, (Sensor) sensorList.get(0), SENSOR_SAMPLE_DELAY);
