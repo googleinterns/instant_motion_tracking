@@ -254,7 +254,7 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // Use MotionEvent properties to interpret taps/rotations/scales
-  public boolean UITouchManager(MotionEvent event) {
+  private boolean UITouchManager(MotionEvent event) {
     if(currentSticker != null) {
       switch (event.getAction()) {
         // Detecting a single click for object re-anchoring
@@ -284,7 +284,7 @@ public class MainActivity extends AppCompatActivity {
 
   // If our fingers are moved in a rotation, then our rotation factor will change
   // by the sum of the rotation of both fingers in radians
-  public float calculateRotationRadians(MotionEvent event) {
+  private float calculateRotationRadians(MotionEvent event) {
     float tangentA =
             (float)
                     Math.atan2(
@@ -301,7 +301,7 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // If our finger-to-finger distance increased, so will our scaling.
-  public float getNewScaleFactor(MotionEvent event, float currentScaleFactor) {
+  private float getNewScaleFactor(MotionEvent event, float currentScaleFactor) {
     double new_distance =
             distance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
     double old_distance =
@@ -318,18 +318,18 @@ public class MainActivity extends AppCompatActivity {
     return currentScaleFactor;
   }
 
-  public void recordClick(MotionEvent event) {
+  private void recordClick(MotionEvent event) {
     float x = (event.getX() / constraintLayout.getWidth());
     float y = (event.getY() / constraintLayout.getHeight());
     currentSticker.setNewAnchor(x, y);
   }
 
-  public double distance(double x1, double y1, double x2, double y2) {
+  private double distance(double x1, double y1, double x2, double y2) {
     return Math.sqrt((y2 - y1) * (y2 - y1) + (x2 - x1) * (x2 - x1));
   }
 
   // Called whenever a button is clicked
-  public void refreshUI() {
+  private void refreshUI() {
     if(currentSticker != null) { // No sticker in view
         buttonLayout.removeAllViews();
         ImageButton deleteSticker = new ImageButton(this);
@@ -417,7 +417,7 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // Sets ImageButton UI for Control Buttons (Delete, Add, Back)
-  public void setUIControlButtonDesign(ImageButton btn, int imageDrawable) {
+  private void setUIControlButtonDesign(ImageButton btn, int imageDrawable) {
       btn.setImageDrawable(getResources().getDrawable(imageDrawable));
       btn.setBackgroundColor(Color.parseColor("#00ffffff"));
       btn.setLayoutParams(new LinearLayout.LayoutParams(200, 200));
@@ -426,7 +426,7 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // Sets ImageButton UI for Sticker Buttons
-  public void setStickerButtonDesign(ImageButton btn, int imageDrawable) {
+  private void setStickerButtonDesign(ImageButton btn, int imageDrawable) {
       btn.setImageDrawable(getResources().getDrawable(imageDrawable));
       btn.setBackground(getResources().getDrawable(R.drawable.circle_button));
       btn.setLayoutParams(new LinearLayout.LayoutParams(250, 250));
@@ -434,7 +434,7 @@ public class MainActivity extends AppCompatActivity {
       btn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
   }
 
-  public void setGIFBitmaps(String gif_url) {
+  private void setGIFBitmaps(String gif_url) {
     GIFBitmaps = new ArrayList<Bitmap>(); // Empty the bitmap array
     Glide.with(this).asGif().load(gif_url).into(new SimpleTarget<GifDrawable>() {
       @Override
@@ -450,12 +450,7 @@ public class MainActivity extends AppCompatActivity {
           StandardGifDecoder GIFDecoder = (StandardGifDecoder) decoder.get(frameLoader);
           for (int i = 0; i < GIFDecoder.getFrameCount(); i++) {
             GIFDecoder.advance();
-            Bitmap bmp = GIFDecoder.getNextFrame();
-            // Bitmaps must be flipped due to native acquisition of frames from Android OS
-            Matrix matrix = new Matrix();
-            matrix.preScale(-1.0f, 1.0f);
-            GIFBitmaps.add(Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(),
-              bmp.getHeight(), matrix, true));
+            GIFBitmaps.add(flipHorizontal(GIFDecoder.getNextFrame()));
           }
         }
         catch (Exception e) {
@@ -465,8 +460,17 @@ public class MainActivity extends AppCompatActivity {
     });
   }
 
+  // Bitmaps must be flipped due to native acquisition of frames from Android OS
+  private Bitmap flipHorizontal(Bitmap bmp) {
+    Matrix matrix = new Matrix();
+    // Flip Bitmap frames horizontally
+    matrix.preScale(-1.0f, 1.0f);
+    return Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(),
+      bmp.getHeight(), matrix, true);
+  }
+
   // Function that is continuously called in order to time GIF frame updates
-  public void updateGIFFrame() {
+  private void updateGIFFrame() {
     long millisPerFrame = 1000/GIF_FRAME_RATE;
     if(System.currentTimeMillis() - gifLastFrameUpdateMS >= millisPerFrame) {
       // Update GIF timestamp
@@ -477,14 +481,14 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // Called once to popup the Keyboard via Android OS with focus set to editText
-  public void openKeyboard() {
+  private void openKeyboard() {
       editText.requestFocus();
       InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
       imm.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT);
   }
 
   // Called once to close the Keyboard via Android OS
-  public void closeKeyboard() {
+  private void closeKeyboard() {
       View view = this.getCurrentFocus();
       if (view != null) {
           InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -601,7 +605,7 @@ public class MainActivity extends AppCompatActivity {
 
     try {
       InputStream inputStream = getAssets().open(DEFAULT_GIF_TEXTURE);
-      defaultGIFTexture = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
+      defaultGIFTexture = flipHorizontal(BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions));
       inputStream.close();
     } catch (Exception e) {
       Log.e(TAG, "Error parsing object texture; error: " + e);
