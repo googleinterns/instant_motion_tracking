@@ -662,9 +662,11 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     varying vec3 vNormal;
     uniform sampler2D texture;  // texture to shade with
 
-    // Define ambient lighting constant to apply onto our texture
-    // (ambient lighting of scene)
-    const float ambient = 0.8;
+    // Define ambient lighting factor that is applied to our texture in order to
+    // generate ambient lighting of the scene on the object. Range is [0.0-1.0],
+    // with the factor being proportional to the brightness of the lighting in the
+    // scene being applied to the object
+    const float ambientLighting = 0.8;
 
     void main() {
       // Sample the texture, retrieving an rgba pixel value
@@ -673,7 +675,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       // pixel, this allows the rendering of transparent background GIFs
       if (pixel.a < 0.2) discard;
 
-      gl_FragColor = vec4(pixel.rgb * ambient, 1.0);
+      gl_FragColor = vec4(pixel.rgb * ambientLighting, 1.0);
     }
   )";
 
