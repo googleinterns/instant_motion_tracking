@@ -62,7 +62,7 @@ namespace {
 //  ANCHORS - Anchor data with x,y,z coordinates (x,y are in [0.0-1.0] range for
 //    position on the device screen, while z is the scaling factor that changes
 //    in proportion to the distance from the tracked region) [REQUIRED]
-//  IMU_MATRIX - float[9] of device rotation matrix [REQUIRED]
+//  IMU_MATRIX - float[9] of row-major device rotation matrix [REQUIRED]
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
 // Output:
@@ -72,7 +72,7 @@ namespace {
 // node{
 //  calculator: "MatricesManagerCalculator"
 //  input_stream: "ANCHORS:tracked_scaled_anchor_data"
-//  input_stream: "IMU_MATRIX:imu_matrix"
+//  input_stream: "IMU_MATRIX:imu_rotation_matrix"
 //  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "USER_SCALINGS:user_scaling_data"
 //  output_stream: "MATRICES:0:first_render_matrices"
@@ -193,7 +193,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   int idx = 0;
   for (int x = 0; x < 3; x++) {
     for (int y = 0; y < 3; y++) {
-      // Rotation matrix must be transposed in order to get inverse of phone movement
+      // Input matrix is row-major matrix, it must be reformatted to column-major
       imu_rotation_submatrix(y, x) = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>()[idx++];
     }
   }

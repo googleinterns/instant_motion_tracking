@@ -19,6 +19,7 @@
 #include <iostream>
 #endif
 
+#include <math.h>
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/port/ret_check.h"
 #include "mediapipe/framework/port/status.h"
@@ -27,7 +28,6 @@
 #include "mediapipe/graphs/object_detection_3d/calculators/camera_parameters.pb.h"
 #include "mediapipe/graphs/object_detection_3d/calculators/gl_animation_overlay_calculator.pb.h"
 #include "mediapipe/graphs/object_detection_3d/calculators/model_matrix.pb.h"
-#include <math.h>
 
 namespace mediapipe {
 
@@ -294,8 +294,7 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       return false;
     }
 
-    int vertices_len = sizeof(triangle_mesh.vertices)/sizeof(triangle_mesh.vertices[0]);
-    triangle_mesh.normals.reset(new float[vertices_len]);
+    triangle_mesh.normals.reset(new float[lengths[0]]);
 
     // Try to read in texture coordinates (4-byte floats)
     triangle_mesh.texture_coords.reset(new float[lengths[1]]);
@@ -641,15 +640,17 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     attribute mediump vec4 texture_coordinate;
 
     // texture coordinate for fragment shader (will be interpolated)
-    varying mediump vec3 sample_coordinate;
+    varying mediump vec2 sample_coordinate;
     varying mediump vec3 vNormal;
 
     void main() {
-      sample_coordinate = texture_coordinate.xyz;
+      sample_coordinate = texture_coordinate.xy;
       mat4 mvpMatrix = perspectiveMatrix * modelMatrix;
       gl_Position = mvpMatrix * position;
 
       vec4 tmpNormal = mvpMatrix * vec4(normal, 1.0);
+      vec4 transformedZero = mvpMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+      tmpNormal = tmpNormal - transformedZero;
       vNormal = normalize(tmpNormal.xyz);
     }
   )";
@@ -657,12 +658,12 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
   const GLchar *frag_src = R"(
     precision mediump float;
 
-    varying vec3 sample_coordinate;  // texture coordinate (0..1)
+    varying vec2 sample_coordinate;  // texture coordinate (0..1)
     varying vec3 vNormal;
     uniform sampler2D texture;  // texture to shade with
 
-    // Define ambient lighting constants
-    const vec3 ambient = vec3(-0.1, -0.1, -0.1);
+    // Define ambient lighting constant
+    const float ambient = 0.8;
 
     void main() {
       // Sample the texture, retrieving an rgba pixel value
@@ -670,10 +671,8 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       // If the alpha (background) value is near transparent, then discard the
       // pixel, this allows the rendering of transparent background GIFs
       if (pixel.a < 0.2) discard;
-      // Convert rgba to rgb
-      vec3 pixelRGB = pixel.rgb;
 
-      gl_FragColor = vec4(pixelRGB + ambient, 1.0);
+      gl_FragColor = vec4(pixel.rgb * ambient, 1.0);
     }
   )";
 

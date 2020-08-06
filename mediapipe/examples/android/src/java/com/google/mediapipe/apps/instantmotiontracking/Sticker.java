@@ -57,14 +57,19 @@ public class Sticker {
   public Sticker() {
     // Every sticker will have a default render of the robot animation
     this.currentRender = Render.ROBOT;
+    // Sticker will render out of view by default
+    this.setNewAnchor(2.0f, 2.0f);
+    // Set the global sticker ID limit for the next sticker
     stickerID = (Sticker.globalIDLimit++);
   }
 
   /** Sets a new asset rendering ID as defined by Mediapipe graph. * */
   public Sticker(Render render) {
     this.currentRender = render;
-    stickerID = (Sticker.globalIDLimit++);
-  }
+    // Sticker will render out of view by default
+    this.setNewAnchor(2.0f, 2.0f);
+    // Set the global sticker ID limit for the next sticker
+    stickerID = (Sticker.globalIDLimit++);  }
 
   /** Return sticker ID integer. * */
   public int getStickerID() {

@@ -122,9 +122,9 @@ public class MainActivity extends AppCompatActivity {
   private final String FOV_SIDE_PACKET_TAG = "vertical_fov_radians";
   private final String ASPECT_RATIO_SIDE_PACKET_TAG = "aspect_ratio";
 
-  private static final String IMU_MATRIX_TAG = "imu_matrix";
+  private static final String IMU_MATRIX_TAG = "imu_rotation_matrix";
   private static final int SENSOR_SAMPLE_DELAY = SensorManager.SENSOR_DELAY_FASTEST;
-  float[] rotationMatrix = new float[9];
+  private float[] rotationMatrix = new float[9];
 
   private static final String STICKER_PROTO_TAG = "sticker_proto_string";
   // Assets for object rendering
@@ -230,14 +230,14 @@ public class MainActivity extends AppCompatActivity {
     SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
     List sensorList = sensorManager.getSensorList(Sensor.TYPE_ROTATION_VECTOR);
     sensorManager.registerListener(new SensorEventListener() {
-      private float[] tmpMatrix = new float[9];
+      private float[] rotMatFromVec = new float[9];
       public void onAccuracyChanged(Sensor sensor, int accuracy) {}
       // Update procedure on sensor adjustment (phone changes orientation)
       public void onSensorChanged(SensorEvent event) {
         // Get the Rotation Matrix from the Rotation Vector
-        SensorManager.getRotationMatrixFromVector(tmpMatrix, event.values);
+        SensorManager.getRotationMatrixFromVector(rotMatFromVec, event.values);
         // System is flipped on Z-axis, therefore, AXIS_MINUS_X is used to remap accordingly
-        SensorManager.remapCoordinateSystem(tmpMatrix, SensorManager.AXIS_MINUS_X, SensorManager.AXIS_Y, rotationMatrix);
+        SensorManager.remapCoordinateSystem(rotMatFromVec, SensorManager.AXIS_MINUS_X, SensorManager.AXIS_Y, rotationMatrix);
       }
     }, (Sensor) sensorList.get(0), SENSOR_SAMPLE_DELAY);
 
