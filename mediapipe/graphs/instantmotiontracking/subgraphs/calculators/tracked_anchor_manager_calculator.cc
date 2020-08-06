@@ -156,7 +156,8 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
     tracked_scaled_anchor_data.emplace_back(anchor);
   }
 
-  previous_iteration_anchor_data_ = current_anchor_data; // Set previous anchors for next iteration
+  // Set previous anchors for next iteration
+  previous_iteration_anchor_data_ = current_anchor_data;
 
   cc->Outputs().Tag(kAnchorsTag).AddPacket(MakePacket<std::vector<Anchor>>(tracked_scaled_anchor_data).At(cc->InputTimestamp()));
   cc->Outputs().Tag(kBoxesOutputTag).Add(pos_boxes.release(), timestamp++);

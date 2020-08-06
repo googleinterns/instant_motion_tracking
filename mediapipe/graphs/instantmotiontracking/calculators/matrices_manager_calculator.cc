@@ -110,10 +110,7 @@ class MatricesManagerCalculator : public CalculatorBase {
         }
       }
     }
-
-    // TODO: Initial sticker setup based on ID (default rotation, scale, etc.) should
-    // be built into the sticker pipeline
-
+    
     // This returns a scale factor by which to alter the projection matrix for
     // the specified render id in order to ensure all objects render at a similar
     // size in the view screen upon initial placement
