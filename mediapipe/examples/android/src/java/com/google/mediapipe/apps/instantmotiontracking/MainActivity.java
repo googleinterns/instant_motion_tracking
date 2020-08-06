@@ -236,7 +236,7 @@ public class MainActivity extends AppCompatActivity {
       public void onSensorChanged(SensorEvent event) {
         // Get the Rotation Matrix from the Rotation Vector
         SensorManager.getRotationMatrixFromVector(rotMatFromVec, event.values);
-        // System is flipped on Z-axis, therefore, AXIS_MINUS_X is used to remap accordingly
+        // AXIS_MINUS_X is used to remap the rotation matrix for left hand rules in the MediaPipe graph
         SensorManager.remapCoordinateSystem(rotMatFromVec, SensorManager.AXIS_MINUS_X, SensorManager.AXIS_Y, rotationMatrix);
       }
     }, (Sensor) sensorList.get(0), SENSOR_SAMPLE_DELAY);

@@ -662,7 +662,8 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     varying vec3 vNormal;
     uniform sampler2D texture;  // texture to shade with
 
-    // Define ambient lighting constant
+    // Define ambient lighting constant to apply onto our texture
+    // (ambient lighting of scene)
     const float ambient = 0.8;
 
     void main() {

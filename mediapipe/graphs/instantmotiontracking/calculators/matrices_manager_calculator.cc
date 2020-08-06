@@ -35,7 +35,7 @@ namespace {
   using Matrix3f = Eigen::Matrix3f;
   using DiagonalMatrix3f = Eigen::DiagonalMatrix<float, 3>;
   constexpr char kAnchorsTag[] = "ANCHORS";
-  constexpr char kIMUMatrixTag[] = "IMU_MATRIX";
+  constexpr char kIMUMatrixTag[] = "IMU_ROTATIONS";
   constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
   constexpr char kUserScalingsTag[] = "USER_SCALINGS";
   constexpr char kRendersTag[] = "RENDER_DATA";
@@ -62,7 +62,7 @@ namespace {
 //  ANCHORS - Anchor data with x,y,z coordinates (x,y are in [0.0-1.0] range for
 //    position on the device screen, while z is the scaling factor that changes
 //    in proportion to the distance from the tracked region) [REQUIRED]
-//  IMU_MATRIX - float[9] of row-major device rotation matrix [REQUIRED]
+//  IMU_ROTATIONS - float[9] of row-major device rotation matrix [REQUIRED]
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
 // Output:
@@ -72,7 +72,7 @@ namespace {
 // node{
 //  calculator: "MatricesManagerCalculator"
 //  input_stream: "ANCHORS:tracked_scaled_anchor_data"
-//  input_stream: "IMU_MATRIX:imu_rotation_matrix"
+//  input_stream: "IMU_ROTATIONS:imu_rotation_matrix"
 //  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "USER_SCALINGS:user_scaling_data"
 //  output_stream: "MATRICES:0:first_render_matrices"
@@ -194,6 +194,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   for (int x = 0; x < 3; x++) {
     for (int y = 0; y < 3; y++) {
       // Input matrix is row-major matrix, it must be reformatted to column-major
+      // via transpose procedure
       imu_rotation_submatrix(y, x) = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>()[idx++];
     }
   }
@@ -217,7 +218,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
 
     model_matrix->set_id(id);
 
-    // The user transformation data associate with this sticker must be defined
+    // The user transformation data associated with this sticker must be defined
     const float user_rotation_radians = GetUserRotation(user_rotation_data, id);
     const float user_scale_factor = GetUserScaler(user_scaling_data, id);
     // We can also get the initial scaling factor based on the preset factor for this render id
@@ -270,10 +271,10 @@ const Matrix3f MatricesManagerCalculator::GenerateUserRotationMatrix(const float
         // with the direction of finger movement from the user (system dependent)
         Eigen::AngleAxisf(-rotation_radians, Eigen::Vector3f::UnitY()) *
         Eigen::AngleAxisf(0.0f, Eigen::Vector3f::UnitZ()) *
-        // The (M_PI * 0.5) must be added in order to adjust the default
-        // rendering of the object (the object should appear in the upright
-        // orientation upon initial render of the scene - this is entirely
-        // dependent on the construction of the .obj file).
+        // Model orientations all assume z-axis is up, but we need y-axis upwards,
+        // therefore, a +(M_PI * 0.5f) transformation must be applied
+        // TODO: Bring default rotations, translations, and scalings into independent
+        // sticker configuration
         Eigen::AngleAxisf(M_PI * 0.5f, Eigen::Vector3f::UnitX());
   // Matrix must be transposed due to the method of submatrix generation in Eigen
   return user_rotation_submatrix.transpose();

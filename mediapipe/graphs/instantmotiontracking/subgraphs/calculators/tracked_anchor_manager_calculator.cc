@@ -61,7 +61,8 @@ constexpr float kUsToMs = 1000.0f; // Used to convert from microseconds to milli
 
 class TrackedAnchorManagerCalculator : public CalculatorBase {
 private:
-  std::vector<Anchor> previous_anchor_data_;
+  // Anchor data from the last iteration of the graph (Used to detect repositioning)
+  std::vector<Anchor> previous_iteration_anchor_data_;
 
 public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
@@ -112,7 +113,7 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
     }
     // Check if initial anchor position has changed
     bool anchor_replaced = false;
-    for(const Anchor &previous_anchor : previous_anchor_data_) {
+    for(const Anchor &previous_anchor : previous_iteration_anchor_data_) {
       if(previous_anchor.sticker_id == anchor.sticker_id) {
         if(previous_anchor.x != anchor.x || previous_anchor.y != anchor.y) {
           anchor_replaced = true;
@@ -120,8 +121,9 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
         }
       }
     }
-    // If anchor is not being tracked or position changes, add/replace in tracking system
+    // If anchor is not being tracked
     if(!anchor_is_being_tracked || anchor_replaced) {
+      // Delete all existing associated tracking boxes if they exist
       cc->Outputs().Tag(kCancelTag).AddPacket(MakePacket<int>(anchor.sticker_id).At(timestamp++));
       TimedBoxProto* box = pos_boxes->add_box();
       box->set_left(anchor.x - kBoxEdgeSize * 0.5f);
@@ -154,7 +156,7 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
     tracked_scaled_anchor_data.emplace_back(anchor);
   }
 
-  previous_anchor_data_ = current_anchor_data; // Set previous anchors for next iteration
+  previous_iteration_anchor_data_ = current_anchor_data; // Set previous anchors for next iteration
 
   cc->Outputs().Tag(kAnchorsTag).AddPacket(MakePacket<std::vector<Anchor>>(tracked_scaled_anchor_data).At(cc->InputTimestamp()));
   cc->Outputs().Tag(kBoxesOutputTag).Add(pos_boxes.release(), timestamp++);
