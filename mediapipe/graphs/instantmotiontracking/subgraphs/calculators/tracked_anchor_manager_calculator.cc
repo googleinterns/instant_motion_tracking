@@ -38,6 +38,8 @@ constexpr float kUsToMs = 1000.0f; // Used to convert from microseconds to milli
 // performance and remove all sticker artifacts
 //
 // Input:
+//  SENTINEL - ID of sticker which has an anchor that must be reset (-1 when no
+// anchor must be reset) [REQUIRED]
 //  ANCHORS - Initial anchor data (tracks changes and where to re/position) [REQUIRED]
 //  BOXES - Used in cycle, boxes being tracked meant to update positions [OPTIONAL
 //  - provided by subgraph]
@@ -49,6 +51,7 @@ constexpr float kUsToMs = 1000.0f; // Used to convert from microseconds to milli
 // Example config:
 // node {
 //   calculator: "TrackedAnchorManagerCalculator"
+//   input_stream: "SENTINEL:sticker_sentinel"
 //   input_stream: "ANCHORS:initial_anchor_data"
 //   input_stream: "BOXES:boxes"
 //   input_stream_info: {
@@ -123,6 +126,7 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
     // Check if anchor position is being reset by user in this graph iteration
     if(sticker_sentinel == anchor.sticker_id) {
       // Delete associated tracking box
+      // TODO: BoxTrackingSubgraph should accept vector to avoid breaking timestamp rules
       cc->Outputs().Tag(kCancelTag).AddPacket(MakePacket<int>(anchor.sticker_id).At(timestamp++));
       // Add a tracking box
       TimedBoxProto* box = pos_boxes->add_box();
