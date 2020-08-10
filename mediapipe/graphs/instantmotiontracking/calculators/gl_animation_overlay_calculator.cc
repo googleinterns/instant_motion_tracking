@@ -294,7 +294,98 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       return false;
     }
 
+    // Use the vertices in order to generate normals for shader usage.
     triangle_mesh.normals.reset(new float[lengths[0]]);
+    float vertex_normals[lengths[0]];
+    float triangle_surface_normals[lengths[0]];
+    int len = lengths[0];
+
+    // Compute every triangle surface normal and store them for later use.
+    for (int i = 0; i < len; i += 3) {
+      // Vector A = V2 - V1
+      float Ax, Ay, Az;
+      // Vector B = V3 - V1;
+      float Bx, By, Bz;
+      // Calculate V1 (Previous Vertex), V2 (Current Vertex), V3 (Next Vertex)
+      // Last vertex (Edge case)
+      if(i >= len-3) {
+        // V2 - V1
+        Ax = triangle_mesh.vertices[i] - triangle_mesh.vertices[i-3];
+        Ay = triangle_mesh.vertices[i+1] - triangle_mesh.vertices[i-2];
+        Az = triangle_mesh.vertices[i+2] - triangle_mesh.vertices[i-1];
+        // V3 - V1
+        Bx = triangle_mesh.vertices[0] - triangle_mesh.vertices[i-3];
+        By = triangle_mesh.vertices[1] - triangle_mesh.vertices[i-2];
+        Bz = triangle_mesh.vertices[2] - triangle_mesh.vertices[i-1];
+      }
+      // First vertex (Edge case)
+      else if(i <= 0) {
+        // V2 - V1
+        Ax = triangle_mesh.vertices[i] - triangle_mesh.vertices[len-3];
+        Ay = triangle_mesh.vertices[i+1] - triangle_mesh.vertices[len-2];
+        Az = triangle_mesh.vertices[i+2] - triangle_mesh.vertices[len-1];
+        // V3 - V1
+        Bx = triangle_mesh.vertices[i+3] - triangle_mesh.vertices[len-3];
+        By = triangle_mesh.vertices[i+4] - triangle_mesh.vertices[len-2];
+        Bz = triangle_mesh.vertices[i+5] - triangle_mesh.vertices[len-1];
+      }
+      else {
+        // V2 - V1
+        Ax = triangle_mesh.vertices[i] - triangle_mesh.vertices[i-3];
+        Ay = triangle_mesh.vertices[i+1] - triangle_mesh.vertices[i-2];
+        Az = triangle_mesh.vertices[i+2] - triangle_mesh.vertices[i-1];
+        // V3 - V1
+        Bx = triangle_mesh.vertices[i+3] - triangle_mesh.vertices[i-3];
+        By = triangle_mesh.vertices[i+4] - triangle_mesh.vertices[i-2];
+        Bz = triangle_mesh.vertices[i+5] - triangle_mesh.vertices[i-1];
+      }
+      // Calculate normals from vectors
+      triangle_surface_normals[i] = Ay * Bz - Az * By;
+      triangle_surface_normals[i+1] = Az * Bx - Ax * Bz;
+      triangle_surface_normals[i+2] = Ax * By - Ay * Bx;
+    }
+
+    // Combine all triangle normals connected to each vertex by adding the X,Y,Z
+    // value of each adjacent triangle surface normal to every vertex and then
+    // averaging the combined value.
+    for (int i = 0; i < len; i+=3) {
+      // Used for averaging of vertex normals
+      float denom = 3.0;
+      // Last vertex (Edge case)
+      if(i >= len-3) {
+        vertex_normals[i] = (triangle_surface_normals[len-3] + triangle_surface_normals[i] + triangle_surface_normals[0])/denom;
+        vertex_normals[i+1] = (triangle_surface_normals[len-2] + triangle_surface_normals[i+1] + triangle_surface_normals[1])/denom;
+        vertex_normals[i+2] = (triangle_surface_normals[len-1] + triangle_surface_normals[i+2] + triangle_surface_normals[2])/denom;
+      }
+      // First vertex (Edge case)
+      else if(i <= 0) {
+        vertex_normals[i] = (triangle_surface_normals[len-3] + triangle_surface_normals[i] + triangle_surface_normals[i+3])/denom;
+        vertex_normals[i+1] = (triangle_surface_normals[len-2] + triangle_surface_normals[i+1] + triangle_surface_normals[i+4])/denom;
+        vertex_normals[i+2] = (triangle_surface_normals[len-1] + triangle_surface_normals[i+2] + triangle_surface_normals[i+5])/denom;
+      }
+      else {
+        vertex_normals[i] = (triangle_surface_normals[i-3] + triangle_surface_normals[i] + triangle_surface_normals[i+3])/denom;
+        vertex_normals[i+1] = (triangle_surface_normals[i-2] + triangle_surface_normals[i+1] + triangle_surface_normals[i+4])/denom;
+        vertex_normals[i+2] = (triangle_surface_normals[i-1] + triangle_surface_normals[i+2] + triangle_surface_normals[i+5])/denom;
+      }
+    }
+
+    // Normalize each triangle surface normal
+    for(int i = 0; i < len; i+=3) {
+      float product = 0.0;
+      product = product + vertex_normals[i] * vertex_normals[i];
+      product = product + vertex_normals[i+1] * vertex_normals[i+1];
+      product = product + vertex_normals[i+2] * vertex_normals[i+2];
+      float magnitude = sqrt(product);
+      vertex_normals[i] /= magnitude;
+      vertex_normals[i+1] /= magnitude;
+      vertex_normals[i+2] /= magnitude;
+    }
+
+    // Set triangle_mesh normals
+    for(int i = 0; i < len; i++) {
+      triangle_mesh.normals.get()[i] = vertex_normals[i];
+    }
 
     // Try to read in texture coordinates (4-byte floats)
     triangle_mesh.texture_coords.reset(new float[lengths[1]]);
@@ -640,17 +731,15 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     attribute mediump vec4 texture_coordinate;
 
     // texture coordinate for fragment shader (will be interpolated)
-    varying mediump vec2 sample_coordinate;
+    varying mediump vec2 sampleCoordinate;
     varying mediump vec3 vNormal;
 
     void main() {
-      sample_coordinate = texture_coordinate.xy;
+      sampleCoordinate = texture_coordinate.xy;
       mat4 mvpMatrix = perspectiveMatrix * modelMatrix;
       gl_Position = mvpMatrix * position;
 
       vec4 tmpNormal = mvpMatrix * vec4(normal, 1.0);
-      vec4 transformedZero = mvpMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-      tmpNormal = tmpNormal - transformedZero;
       vNormal = normalize(tmpNormal.xyz);
     }
   )";
@@ -658,24 +747,61 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
   const GLchar *frag_src = R"(
     precision mediump float;
 
-    varying vec2 sample_coordinate;  // texture coordinate (0..1)
+    varying vec2 sampleCoordinate;  // texture coordinate (0..1)
     varying vec3 vNormal;
     uniform sampler2D texture;  // texture to shade with
+    const float kPi = 3.14159265359;
 
     // Define ambient lighting factor that is applied to our texture in order to
     // generate ambient lighting of the scene on the object. Range is [0.0-1.0],
     // with the factor being proportional to the brightness of the lighting in the
     // scene being applied to the object
-    const float ambient_lighting = 0.8f;
+    const float kAmbientLighting = 0.95;
+
+    // Define RGB values for light source
+    const vec3 kLightColor = vec3(0.2);
+    // Exponent for directional lighting that governs diffusion of surface light
+    const float kExponent = 1.0;
+
+    // Calculate and return the color (diffuse and specular together) reflected by
+    // a directional light.
+    vec3 GetDirectionalLight(vec3 pos, vec3 normal, vec3 viewDir, vec3 lightDir, vec3 lightColor, float exponent) {
+      // Intensity of the diffuse light. Saturate to keep within the 0-1 range.
+      float normal_dot_light_dir = dot(normal, -lightDir);
+      float intensity = clamp(normal_dot_light_dir, 0.0, 1.0);
+      // Calculate the diffuse light
+      vec3 diffuse = intensity * lightColor;
+      // http://www.rorydriscoll.com/2009/01/25/energy-conservation-in-games/
+      float kEnergyConservation = (2.0 + exponent) / (2.0 * kPi);
+      vec3 reflect_dir = reflect(lightDir, normal);
+      // Intensity of the specular light
+      float view_dot_reflect = dot(-viewDir, reflect_dir);
+      // Use an epsilon for pow because pow(x,y) is undefined if x < 0 or x == 0
+      // and y <= 0 (GLSL Spec 8.2)
+      const float kEpsilon = 1e-5;
+      intensity = kEnergyConservation * pow(clamp(view_dot_reflect, kEpsilon, 1.0),
+       exponent);
+      // Specular color:
+      vec3 specular = intensity * lightColor;
+      return diffuse + specular;
+    }
 
     void main() {
       // Sample the texture, retrieving an rgba pixel value
-      vec4 pixel = texture2D(texture, sample_coordinate.xy);
+      vec4 pixel = texture2D(texture, sampleCoordinate.xy);
       // If the alpha (background) value is near transparent, then discard the
       // pixel, this allows the rendering of transparent background GIFs
       if (pixel.a < 0.2) discard;
 
-      gl_FragColor = vec4(pixel.rgb * ambient_lighting, 1.0);
+      // Pixel definitions and presets
+      vec3 lightPos = vec3(0.5, 1.0, 1.0);
+      vec3 pixelPos = vec3(sampleCoordinate.xy, 1.0);
+      vec3 viewDir = vec3(0.0, 0.0, -10.0);//normalize(-pixelPos);
+      vec3 lightDir = normalize(lightPos - pixelPos);
+
+      vec3 lighting = GetDirectionalLight(pixelPos, vNormal, viewDir, lightDir, kLightColor, kExponent);
+
+      gl_FragColor = vec4(kAmbientLighting * pixel.rgb + lighting, 1.0);
     }
   )";
 
