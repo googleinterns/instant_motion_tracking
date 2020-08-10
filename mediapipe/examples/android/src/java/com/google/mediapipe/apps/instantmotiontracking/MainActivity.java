@@ -108,7 +108,11 @@ public class MainActivity extends AppCompatActivity {
   private LinearLayout buttonLayout;
 
   private ArrayList<Sticker> stickerArrayList;
-  private Sticker currentSticker; // Sticker being edited
+  // Current sticker being edited by user
+  private Sticker currentSticker;
+  // Trip value used to determine sticker re-anchoring
+  private final String STICKER_SENTINEL_TAG = "sticker_sentinel";
+  private int stickerSentinel = -1;
 
   // Define parameters for 'reactivity' of object
   private final float ROTATION_SPEED = 5.0f;
@@ -122,38 +126,38 @@ public class MainActivity extends AppCompatActivity {
   private final String FOV_SIDE_PACKET_TAG = "vertical_fov_radians";
   private final String ASPECT_RATIO_SIDE_PACKET_TAG = "aspect_ratio";
 
-  private static final String IMU_MATRIX_TAG = "imu_rotation_matrix";
-  private static final int SENSOR_SAMPLE_DELAY = SensorManager.SENSOR_DELAY_FASTEST;
+  private final String IMU_MATRIX_TAG = "imu_rotation_matrix";
+  private final int SENSOR_SAMPLE_DELAY = SensorManager.SENSOR_DELAY_FASTEST;
   private float[] rotationMatrix = new float[9];
 
-  private static final String STICKER_PROTO_TAG = "sticker_proto_string";
+  private final String STICKER_PROTO_TAG = "sticker_proto_string";
   // Assets for object rendering
   // All robot animation assets and tags
   // TODO: Grouping all tags and assets into a seperate structure
   // TODO: bitmaps are space heavy, try to use compressed like png/webp
   private Bitmap robotTexture = null;
-  private static final String ROBOT_TEXTURE = "robot_texture.bmp";
-  private static final String ROBOT_FILE = "robot.obj.uuu";
-  private static final String ROBOT_TEXTURE_TAG = "robot_texture";
-  private static final String ROBOT_ASSET_TAG = "robot_asset_name";
+  private final String ROBOT_TEXTURE = "robot_texture.bmp";
+  private final String ROBOT_FILE = "robot.obj.uuu";
+  private final String ROBOT_TEXTURE_TAG = "robot_texture";
+  private final String ROBOT_ASSET_TAG = "robot_asset_name";
   // All dino animation assets and tags
   private Bitmap dinoTexture = null;
-  private static final String DINO_TEXTURE = "dino_texture.bmp";
-  private static final String DINO_FILE = "dino.obj.uuu";
-  private static final String DINO_TEXTURE_TAG = "dino_texture";
-  private static final String DINO_ASSET_TAG = "dino_asset_name";
+  private final String DINO_TEXTURE = "dino_texture.bmp";
+  private final String DINO_FILE = "dino.obj.uuu";
+  private final String DINO_TEXTURE_TAG = "dino_texture";
+  private final String DINO_ASSET_TAG = "dino_asset_name";
   // All GIF animation assets and tags
   private GIFEditText editText;
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
   private int gifCurrentIndex = 0;
-  private static final int GIF_FRAME_RATE = 20; // 20 FPS
+  private final int GIF_FRAME_RATE = 20; // 20 FPS
   // last time the GIF was updated
   private long gifLastFrameUpdateMS = System.currentTimeMillis();
   private Bitmap defaultGIFTexture = null; // Texture sent if no gif available
-  private static final String DEFAULT_GIF_TEXTURE = "default_gif_texture.bmp";
-  private static final String GIF_FILE = "gif.obj.uuu";
-  private static final String GIF_TEXTURE_TAG = "gif_texture";
-  private static final String GIF_ASSET_TAG = "gif_asset_name";
+  private final String DEFAULT_GIF_TEXTURE = "default_gif_texture.bmp";
+  private final String GIF_FILE = "gif.obj.uuu";
+  private final String GIF_TEXTURE_TAG = "gif_texture";
+  private final String GIF_ASSET_TAG = "gif_asset_name";
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -322,6 +326,9 @@ public class MainActivity extends AppCompatActivity {
     float x = (event.getX() / constraintLayout.getWidth());
     float y = (event.getY() / constraintLayout.getHeight());
     currentSticker.setNewAnchor(x, y);
+    // Setting the stickerSentinel will reposition the sticker in the MediaPipe
+    // graph
+    stickerSentinel = currentSticker.getStickerID();
   }
 
   private double distance(double x1, double y1, double x2, double y2) {
@@ -624,15 +631,20 @@ public class MainActivity extends AppCompatActivity {
       // Update to next GIF frame based on timing and frame rate
       updateGIFFrame();
 
-      // Initialize sticker data protobuffer packet information
+      Packet stickerSentinelPacket = processor.getPacketCreator().createInt32(stickerSentinel);
+      // Sticker sentinel value must be reset for next graph iteration
+      stickerSentinel = -1;
+      // Initialize sticker data protobufferpacket information
       Packet stickerProtoDataPacket = processor.getPacketCreator().createSerializedProto(Sticker.getMessageLiteData(stickerArrayList));
       // Define and set the IMU sensory information float array
       Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(rotationMatrix);
       // Communicate GIF textures (dynamic texturing) to graph
       Packet gifTexturePacket = processor.getPacketCreator().createRgbaImageFrame(currentGIFBitmap);
+      processor.getGraph().addConsumablePacketToInputStream(STICKER_SENTINEL_TAG, stickerSentinelPacket, timestamp);
       processor.getGraph().addConsumablePacketToInputStream(STICKER_PROTO_TAG, stickerProtoDataPacket, timestamp);
       processor.getGraph().addConsumablePacketToInputStream(IMU_MATRIX_TAG, imuDataPacket, timestamp);
       processor.getGraph().addConsumablePacketToInputStream(GIF_TEXTURE_TAG, gifTexturePacket, timestamp);
+      stickerSentinelPacket.release();
       stickerProtoDataPacket.release();
       imuDataPacket.release();
       gifTexturePacket.release();

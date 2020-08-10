@@ -16,6 +16,7 @@
 
 # Images in/out of graph with sticker data and IMU information from device
 input_stream: "input_video"
+input_stream: "sticker_sentinel"
 input_stream: "sticker_proto_string"
 input_stream: "imu_rotation_matrix"
 input_stream: "gif_texture"
@@ -36,6 +37,7 @@ node {
 node {
   calculator: "RegionTrackingSubgraph"
   input_stream: "VIDEO:input_video"
+  input_stream: "SENTINEL:sticker_sentinel"
   input_stream: "ANCHORS:initial_anchor_data"
   output_stream: "ANCHORS:tracked_anchor_data"
 }
