@@ -294,99 +294,6 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       return false;
     }
 
-    // Use the vertices in order to generate normals for shader usage.
-    triangle_mesh.normals.reset(new float[lengths[0]]);
-    float vertex_normals[lengths[0]];
-    float triangle_surface_normals[lengths[0]];
-    int len = lengths[0];
-
-    // Compute every triangle surface normal and store them for later use.
-    for (int i = 0; i < len; i += 3) {
-      // Vector A = V2 - V1
-      float Ax, Ay, Az;
-      // Vector B = V3 - V1;
-      float Bx, By, Bz;
-      // Calculate V1 (Previous Vertex), V2 (Current Vertex), V3 (Next Vertex)
-      // Last vertex (Edge case)
-      if(i >= len-3) {
-        // V2 - V1
-        Ax = triangle_mesh.vertices[i] - triangle_mesh.vertices[i-3];
-        Ay = triangle_mesh.vertices[i+1] - triangle_mesh.vertices[i-2];
-        Az = triangle_mesh.vertices[i+2] - triangle_mesh.vertices[i-1];
-        // V3 - V1
-        Bx = triangle_mesh.vertices[0] - triangle_mesh.vertices[i-3];
-        By = triangle_mesh.vertices[1] - triangle_mesh.vertices[i-2];
-        Bz = triangle_mesh.vertices[2] - triangle_mesh.vertices[i-1];
-      }
-      // First vertex (Edge case)
-      else if(i <= 0) {
-        // V2 - V1
-        Ax = triangle_mesh.vertices[i] - triangle_mesh.vertices[len-3];
-        Ay = triangle_mesh.vertices[i+1] - triangle_mesh.vertices[len-2];
-        Az = triangle_mesh.vertices[i+2] - triangle_mesh.vertices[len-1];
-        // V3 - V1
-        Bx = triangle_mesh.vertices[i+3] - triangle_mesh.vertices[len-3];
-        By = triangle_mesh.vertices[i+4] - triangle_mesh.vertices[len-2];
-        Bz = triangle_mesh.vertices[i+5] - triangle_mesh.vertices[len-1];
-      }
-      else {
-        // V2 - V1
-        Ax = triangle_mesh.vertices[i] - triangle_mesh.vertices[i-3];
-        Ay = triangle_mesh.vertices[i+1] - triangle_mesh.vertices[i-2];
-        Az = triangle_mesh.vertices[i+2] - triangle_mesh.vertices[i-1];
-        // V3 - V1
-        Bx = triangle_mesh.vertices[i+3] - triangle_mesh.vertices[i-3];
-        By = triangle_mesh.vertices[i+4] - triangle_mesh.vertices[i-2];
-        Bz = triangle_mesh.vertices[i+5] - triangle_mesh.vertices[i-1];
-      }
-      // Calculate normals from vectors
-      triangle_surface_normals[i] = Ay * Bz - Az * By;
-      triangle_surface_normals[i+1] = Az * Bx - Ax * Bz;
-      triangle_surface_normals[i+2] = Ax * By - Ay * Bx;
-    }
-
-    // Combine all triangle normals connected to each vertex by adding the X,Y,Z
-    // value of each adjacent triangle surface normal to every vertex and then
-    // averaging the combined value.
-    for (int i = 0; i < len; i+=3) {
-      // Used for averaging of vertex normals
-      float denom = 3.0;
-      // Last vertex (Edge case)
-      if(i >= len-3) {
-        vertex_normals[i] = (triangle_surface_normals[len-3] + triangle_surface_normals[i] + triangle_surface_normals[0])/denom;
-        vertex_normals[i+1] = (triangle_surface_normals[len-2] + triangle_surface_normals[i+1] + triangle_surface_normals[1])/denom;
-        vertex_normals[i+2] = (triangle_surface_normals[len-1] + triangle_surface_normals[i+2] + triangle_surface_normals[2])/denom;
-      }
-      // First vertex (Edge case)
-      else if(i <= 0) {
-        vertex_normals[i] = (triangle_surface_normals[len-3] + triangle_surface_normals[i] + triangle_surface_normals[i+3])/denom;
-        vertex_normals[i+1] = (triangle_surface_normals[len-2] + triangle_surface_normals[i+1] + triangle_surface_normals[i+4])/denom;
-        vertex_normals[i+2] = (triangle_surface_normals[len-1] + triangle_surface_normals[i+2] + triangle_surface_normals[i+5])/denom;
-      }
-      else {
-        vertex_normals[i] = (triangle_surface_normals[i-3] + triangle_surface_normals[i] + triangle_surface_normals[i+3])/denom;
-        vertex_normals[i+1] = (triangle_surface_normals[i-2] + triangle_surface_normals[i+1] + triangle_surface_normals[i+4])/denom;
-        vertex_normals[i+2] = (triangle_surface_normals[i-1] + triangle_surface_normals[i+2] + triangle_surface_normals[i+5])/denom;
-      }
-    }
-
-    // Normalize each triangle surface normal
-    for(int i = 0; i < len; i+=3) {
-      float product = 0.0;
-      product = product + vertex_normals[i] * vertex_normals[i];
-      product = product + vertex_normals[i+1] * vertex_normals[i+1];
-      product = product + vertex_normals[i+2] * vertex_normals[i+2];
-      float magnitude = sqrt(product);
-      vertex_normals[i] /= magnitude;
-      vertex_normals[i+1] /= magnitude;
-      vertex_normals[i+2] /= magnitude;
-    }
-
-    // Set triangle_mesh normals
-    for(int i = 0; i < len; i++) {
-      triangle_mesh.normals.get()[i] = vertex_normals[i];
-    }
-
     // Try to read in texture coordinates (4-byte floats)
     triangle_mesh.texture_coords.reset(new float[lengths[1]]);
     if (!ReadBytesFromAsset(asset, (void *)triangle_mesh.texture_coords.get(),
@@ -402,6 +309,67 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       LOG(ERROR) << "Failed to read indices for frame " << frame_count_;
       return false;
     }
+
+    // Set triangle_mesh normals for shader usage
+    int len = lengths[2];
+    triangle_mesh.normals.reset(new float[len]);
+    float triangle_normals[len];
+
+    // Compute every triangle surface normal and store them for later use.
+    for (int idx = 0; idx < len; idx += 3) {
+      int v1 = triangle_mesh.triangle_indices.get()[idx];
+      int v2 = triangle_mesh.triangle_indices.get()[idx + 1];
+      int v3 = triangle_mesh.triangle_indices.get()[idx + 2];
+      // Previous (V1) vertex X,Y,Z indices in triangle_mesh.vertices
+      float V1x = triangle_mesh.vertices[v1 * 3];
+      float V1y = triangle_mesh.vertices[v1 * 3 + 1];
+      float V1z = triangle_mesh.vertices[v1 * 3 + 2];
+      // Current (V2) vertex X,Y,Z indices in triangle_mesh.vertices
+      float V2x = triangle_mesh.vertices[v2 * 3];
+      float V2y = triangle_mesh.vertices[v2 * 3 + 1];
+      float V2z = triangle_mesh.vertices[v2 * 3 + 2];
+      // Next (V3) vertex X,Y,Z indices in triangle_mesh.vertices
+      float V3x = triangle_mesh.vertices[v3 * 3];
+      float V3y = triangle_mesh.vertices[v3 * 3 + 1];
+      float V3z = triangle_mesh.vertices[v3 * 3 + 2];
+      // Calculate normals from vertices
+      // V2 - V1
+      float Ax = V2x - V1x;
+      float Ay = V2y - V1y;
+      float Az = V2z - V1z;
+      // V3 - V1
+      float Bx = V3x - V1x;
+      float By = V3y - V1y;
+      float Bz = V3z - V1z;
+      // Calculate cross product
+      triangle_normals[idx] = Ay * Bz - Az * By;
+      triangle_normals[idx + 1] = Az * Bx - Ax * Bz;
+      triangle_normals[idx + 2] = Ax * By - Ay * Bx;
+    }
+
+    // Normalize each triangle surface normal
+    for(int i = 0; i < len; i+=3) {
+      float product = 0.0;
+      product = product + triangle_normals[i] * triangle_normals[i];
+      product = product + triangle_normals[i+1] * triangle_normals[i+1];
+      product = product + triangle_normals[i+2] * triangle_normals[i+2];
+      float magnitude = sqrt(product);
+      triangle_normals[i] /= magnitude;
+      triangle_normals[i+1] /= magnitude;
+      triangle_normals[i+2] /= magnitude;
+    }
+
+    // Combine all triangle normals connected to each vertex by adding the X,Y,Z
+    // value of each adjacent triangle surface normal to every vertex and then
+    // averaging the combined value.
+    for (int idx = 0; idx < len; idx+=3) {
+      float denom = 3.0;
+      // Set triangle_mesh normals
+      triangle_mesh.normals.get()[idx] = (triangle_normals[(idx - 3 + len) % len] + triangle_normals[idx] + triangle_normals[(idx + 3) % (len)])/denom;
+      triangle_mesh.normals.get()[idx + 1] = (triangle_normals[(idx - 2 + len) % len] + triangle_normals[idx + 1] + triangle_normals[(idx + 4) % (len)])/denom;
+      triangle_mesh.normals.get()[idx + 2] = (triangle_normals[(idx - 1 + len) % len] + triangle_normals[idx + 2] + triangle_normals[(idx + 5) % (len)])/denom;
+    }
+
     frame_count_++;
   }
   AAsset_close(asset);
@@ -739,7 +707,11 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       mat4 mvpMatrix = perspectiveMatrix * modelMatrix;
       gl_Position = mvpMatrix * position;
 
+      // TODO: Pass in rotation submatrix with no scaling or transforms to prevent
+      // breaking vNormal in case of model matrix having non-uniform scaling
       vec4 tmpNormal = mvpMatrix * vec4(normal, 1.0);
+      vec4 transformedZero = mvpMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+      tmpNormal = tmpNormal - transformedZero;
       vNormal = normalize(tmpNormal.xyz);
     }
   )";
@@ -759,7 +731,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     const float kAmbientLighting = 0.95;
 
     // Define RGB values for light source
-    const vec3 kLightColor = vec3(0.2);
+    const vec3 kLightColor = vec3(1.0);
     // Exponent for directional lighting that governs diffusion of surface light
     const float kExponent = 1.0;
     // Define direction of lighting effect source
