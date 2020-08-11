@@ -78,14 +78,14 @@ public:
     cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
     cc->Inputs().Tag(kSentinelTag).Set<int>();
 
-    if(cc->Inputs().HasTag(kBoxesInputTag)) {
+    if (cc->Inputs().HasTag(kBoxesInputTag)) {
       cc->Inputs().Tag(kBoxesInputTag).Set<TimedBoxProtoList>();
     }
 
     cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
     cc->Outputs().Tag(kBoxesOutputTag).Set<TimedBoxProtoList>();
 
-    if(cc->Outputs().HasTag(kCancelTag)) {
+    if (cc->Outputs().HasTag(kCancelTag)) {
       cc->Outputs().Tag(kCancelTag).Set<int>();
     }
 
@@ -108,23 +108,23 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
   std::vector<Anchor> tracked_scaled_anchor_data;
 
   // Delete any boxes being tracked without an associated anchor
-  for(const TimedBoxProto& box : cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>().box()) {
+  for (const TimedBoxProto& box : cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>().box()) {
     bool anchor_exists = false;
-    for(Anchor anchor : current_anchor_data) {
-      if(box.id() == anchor.sticker_id) {
+    for (Anchor anchor : current_anchor_data) {
+      if (box.id() == anchor.sticker_id) {
         anchor_exists = true;
         break;
       }
     }
-    if(!anchor_exists) {
+    if (!anchor_exists) {
       cc->Outputs().Tag(kCancelTag).AddPacket(MakePacket<int>(box.id()).At(timestamp++));
     }
   }
 
   // Perform tracking or updating for each anchor position
-  for(Anchor anchor : current_anchor_data) {
+  for (Anchor anchor : current_anchor_data) {
     // Check if anchor position is being reset by user in this graph iteration
-    if(sticker_sentinel == anchor.sticker_id) {
+    if (sticker_sentinel == anchor.sticker_id) {
       // Delete associated tracking box
       // TODO: BoxTrackingSubgraph should accept vector to avoid breaking timestamp rules
       cc->Outputs().Tag(kCancelTag).AddPacket(MakePacket<int>(anchor.sticker_id).At(timestamp++));
@@ -144,9 +144,9 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
       // Attempt to update anchor position from tracking subgraph (TimedBoxProto)
       bool updated_from_tracker = false;
       const TimedBoxProtoList box_list = cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>();
-      for(const auto& box : box_list.box())
+      for (const auto& box : box_list.box())
       {
-        if(box.id() == anchor.sticker_id) {
+        if (box.id() == anchor.sticker_id) {
           // Get center x normalized coordinate [0.0-1.0]
           anchor.x = (box.left() + box.right()) * 0.5f;
           // Get center y normalized coordinate [0.0-1.0]
@@ -162,9 +162,9 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
       // at last recorded anchor coordinates. This will allow all current stickers
       // to be tracked at approximately last location even if re-acquisitioning
       // in the BoxTrackingSubgraph encounters errors
-      if(!updated_from_tracker) {
-        for(Anchor prev_anchor : previous_anchor_data) {
-          if(anchor.sticker_id == prev_anchor.sticker_id) {
+      if (!updated_from_tracker) {
+        for (Anchor prev_anchor : previous_anchor_data) {
+          if (anchor.sticker_id == prev_anchor.sticker_id) {
             anchor = prev_anchor;
             TimedBoxProto* box = pos_boxes->add_box();
             box->set_left(anchor.x - kBoxEdgeSize * 0.5f);

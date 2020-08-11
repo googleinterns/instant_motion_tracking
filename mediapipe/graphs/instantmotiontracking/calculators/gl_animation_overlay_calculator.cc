@@ -762,7 +762,12 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     const vec3 kLightColor = vec3(0.2);
     // Exponent for directional lighting that governs diffusion of surface light
     const float kExponent = 1.0;
+    // Define direction of lighting effect source
+    const vec3 lightDir = normalize(0.0, -1.0, -0.6);
+    // Hard-coded view direction
+    const vec3 viewDir = (0.0, 0.0, -1.0);
 
+    // DirectionalLighting procedure from imported from Lullaby @ https://github.com/google/lullaby
     // Calculate and return the color (diffuse and specular together) reflected by
     // a directional light.
     vec3 GetDirectionalLight(vec3 pos, vec3 normal, vec3 viewDir, vec3 lightDir, vec3 lightColor, float exponent) {
@@ -788,20 +793,17 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
 
     void main() {
       // Sample the texture, retrieving an rgba pixel value
-      vec4 pixel = texture2D(texture, sampleCoordinate.xy);
+      vec4 pixel = texture2D(texture, sampleCoordinate);
       // If the alpha (background) value is near transparent, then discard the
       // pixel, this allows the rendering of transparent background GIFs
       if (pixel.a < 0.2) discard;
 
-      // Pixel definitions and presets
-      vec3 lightPos = vec3(0.5, 1.0, 1.0);
-      vec3 pixelPos = vec3(sampleCoordinate.xy, 1.0);
-      vec3 viewDir = vec3(0.0, 0.0, -10.0);//normalize(-pixelPos);
-      vec3 lightDir = normalize(lightPos - pixelPos);
-
+      // Convert pixel to 3D for lighting procedure
+      vec3 pixelPos = vec3(sampleCoordinate, 1.0);
+      // Generate directional lighting effect
       vec3 lighting = GetDirectionalLight(pixelPos, vNormal, viewDir, lightDir, kLightColor, kExponent);
-
-      gl_FragColor = vec4(kAmbientLighting * pixel.rgb + lighting, 1.0);
+      // Apply both ambient and directional lighting to our texture
+      gl_FragColor = vec4((vec3(kAmbientLighting) + lighting) * pixel.rgb, 1.0);
     }
   )";
 

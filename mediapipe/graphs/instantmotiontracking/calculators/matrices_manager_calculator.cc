@@ -110,18 +110,18 @@ class MatricesManagerCalculator : public CalculatorBase {
         }
       }
     }
-    
+
     // This returns a scale factor by which to alter the projection matrix for
     // the specified render id in order to ensure all objects render at a similar
     // size in the view screen upon initial placement
     const float GetDefaultRenderScale(const int render_id) {
-      if(render_id == 0) { // Robot
+      if (render_id == 0) { // Robot
         return 5.0f;
       }
-      else if(render_id == 1) { // Dino
+      else if (render_id == 1) { // Dino
         return 0.75f;
       }
-      else if(render_id == 2) { // GIF
+      else if (render_id == 2) { // GIF
         return 160.0f;
       }
     }
