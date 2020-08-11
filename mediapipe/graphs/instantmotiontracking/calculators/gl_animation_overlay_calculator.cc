@@ -763,9 +763,9 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     // Exponent for directional lighting that governs diffusion of surface light
     const float kExponent = 1.0;
     // Define direction of lighting effect source
-    const vec3 lightDir = normalize(0.0, -1.0, -0.6);
+    const vec3 lightDir = vec3(0.0, -1.0, -0.6);
     // Hard-coded view direction
-    const vec3 viewDir = (0.0, 0.0, -1.0);
+    const vec3 viewDir = vec3(0.0, 0.0, -1.0);
 
     // DirectionalLighting procedure from imported from Lullaby @ https://github.com/google/lullaby
     // Calculate and return the color (diffuse and specular together) reflected by
