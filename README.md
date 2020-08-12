@@ -9,7 +9,7 @@ This document focuses on the [below graph](#main-graph) that performs instant mo
 
 For overall context on instant motion tracking, please read this [paper](https://arxiv.org/abs/1907.06796).
 
-![instant_motion_tracking_android_gif1|710x350](images/demo_1.gif) ![instant_motion_tracking_android_gif2|710x350](images/demo_2.gif)
+![instant_motion_tracking_android_gif1|720x350](images/demo_1.gif) ![instant_motion_tracking_android_gif2|720x350](images/demo_2.gif)
 
 ## Android
 
