@@ -418,8 +418,17 @@ public class MainActivity extends AppCompatActivity {
                 refreshUI();
             }
         });
+        ImageButton clearStickers = new ImageButton(this);
+        setUIControlButtonDesign(clearStickers, R.drawable.baseline_clear_all_24);
+        clearStickers.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                stickerArrayList.clear();
+                refreshUI();
+            }
+        });
 
         buttonLayout.addView(addSticker);
+        buttonLayout.addView(clearStickers);
     }
   }
 

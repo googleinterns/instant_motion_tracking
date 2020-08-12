@@ -26,14 +26,14 @@
         android:layout_height="fill_parent"
         android:gravity="top"
         android:orientation="vertical"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
         <LinearLayout
             android:id="@+id/button_layout"
             android:layout_width="wrap_content"
-            android:layout_height="fill_parent"
+            android:layout_height="wrap_content"
             android:gravity="top"
             android:orientation="vertical"
             app:layout_constraintBottom_toBottomOf="parent"
