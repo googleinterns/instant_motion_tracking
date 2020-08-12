@@ -365,9 +365,9 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     for (int idx = 0; idx < len; idx+=3) {
       float denom = 3.0;
       // Set triangle_mesh normals
-      triangle_mesh.normals.get()[idx] = (triangle_normals[(idx - 3 + len) % len] + triangle_normals[idx] + triangle_normals[(idx + 3) % (len)])/denom;
-      triangle_mesh.normals.get()[idx + 1] = (triangle_normals[(idx - 2 + len) % len] + triangle_normals[idx + 1] + triangle_normals[(idx + 4) % (len)])/denom;
-      triangle_mesh.normals.get()[idx + 2] = (triangle_normals[(idx - 1 + len) % len] + triangle_normals[idx + 2] + triangle_normals[(idx + 5) % (len)])/denom;
+      triangle_mesh.normals.get()[idx] = (triangle_normals[idx] + triangle_normals[(idx + 3) % (len)] + triangle_normals[(idx + 6) % (len)])/denom;
+      triangle_mesh.normals.get()[idx + 1] = (triangle_normals[idx + 1] + triangle_normals[(idx + 4) % (len)] + triangle_normals[(idx + 7) % (len)])/denom;
+      triangle_mesh.normals.get()[idx + 2] = (triangle_normals[idx + 2] + triangle_normals[(idx + 5) % (len)] + triangle_normals[(idx + 8) % (len)])/denom;
     }
 
     frame_count_++;
@@ -728,10 +728,10 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     // generate ambient lighting of the scene on the object. Range is [0.0-1.0],
     // with the factor being proportional to the brightness of the lighting in the
     // scene being applied to the object
-    const float kAmbientLighting = 0.95;
+    const float kAmbientLighting = 0.9;
 
     // Define RGB values for light source
-    const vec3 kLightColor = vec3(1.0);
+    const vec3 kLightColor = vec3(0.3);
     // Exponent for directional lighting that governs diffusion of surface light
     const float kExponent = 1.0;
     // Define direction of lighting effect source
