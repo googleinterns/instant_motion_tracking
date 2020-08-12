@@ -42,6 +42,8 @@ mv instant_motion_tracking/mediapipe/examples/android/src/java/com/google/mediap
 Navigate to the mediapipe directory containing your WORKSPACE file and use the following commands to add Glide Image Loading dependencies to the Maven installation section: 
 
 ```bash
+cd mediapipe
+
 sed -i '/"com.google.guava:guava:27.0.1-android",/a "com.github.bumptech.glide:glide:4.11.0",' WORKSPACE 
 
 sed -i '/"com.github.bumptech.glide:glide:4.11.0",/a "com.github.bumptech.glide:gifdecoder:4.11.0",' WORKSPACE 
@@ -55,9 +57,11 @@ sed -i '/"com.github.bumptech.glide:glide:4.11.0",/a "com.github.bumptech.glide:
 # ]
 ```
 
-Due to BUILD dependency issues with related MediaPipe projects, you must change the visibility permissions of the object_tracking_3d calculators. Run the command below to copy the modified BUILD file to fix privacy issues between projects:
+Due to BUILD dependency issues with related MediaPipe projects, you must change the visibility permissions of the object_tracking_3d calculators. Navigate back to the parent directory containing both 'instant_motion_tracking' and 'mediapipe' to run the command below to copy the modified BUILD file to fix privacy issues between projects:
 
 ```base
+cd ../
+
 mv instant_motion_tracking/installation/BUILD mediapipe/mediapipe/graphs/object_detection_3d/calculators/BUILD
 ```
 
