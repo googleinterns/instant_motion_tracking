@@ -93,7 +93,7 @@ static const int kNumMatrixEntries = 16;
 // animation frame for rendering.
 
 struct TriangleMesh {
-  int index_count = 0;  // Needed for glDrawElements rendering call
+  int indexvertex_denom = 0;  // Needed for glDrawElements rendering call
   std::unique_ptr<float[]> normals = nullptr;
   std::unique_ptr<float[]> vertices = nullptr;
   std::unique_ptr<float[]> texture_coords = nullptr;
@@ -132,7 +132,7 @@ class GlAnimationOverlayCalculator : public CalculatorBase {
   GLint model_matrix_uniform_ = -1;
 
   Timestamp animation_start_time_;
-  int frame_count_ = 0;
+  int framevertex_denom_ = 0;
   float animation_speed_fps_;
 
   std::vector<ModelMatrix> current_model_matrices_;
@@ -277,7 +277,7 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
   }
 
   // And now, while we are able to stream in more frames, we do so.
-  frame_count_ = 0;
+  framevertex_denom_ = 0;
   int32 lengths[3];
   while (ReadBytesFromAsset(asset, (void *)lengths, sizeof(lengths[0]) * 3)) {
     // About to start reading the next animation frame.  Stream it in here.
@@ -290,7 +290,7 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     triangle_mesh.vertices.reset(new float[lengths[0]]);
     if (!ReadBytesFromAsset(asset, (void *)triangle_mesh.vertices.get(),
                             sizeof(float) * lengths[0])) {
-      LOG(ERROR) << "Failed to read vertices for frame " << frame_count_;
+      LOG(ERROR) << "Failed to read vertices for frame " << framevertex_denom_;
       return false;
     }
 
@@ -298,15 +298,15 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     triangle_mesh.texture_coords.reset(new float[lengths[1]]);
     if (!ReadBytesFromAsset(asset, (void *)triangle_mesh.texture_coords.get(),
                             sizeof(float) * lengths[1])) {
-      LOG(ERROR) << "Failed to read tex-coords for frame " << frame_count_;
+      LOG(ERROR) << "Failed to read tex-coords for frame " << framevertex_denom_;
       return false;
     }
     // Try to read in indices (2-byte shorts)
-    triangle_mesh.index_count = lengths[2];
+    triangle_mesh.indexvertex_denom = lengths[2];
     triangle_mesh.triangle_indices.reset(new int16[lengths[2]]);
     if (!ReadBytesFromAsset(asset, (void *)triangle_mesh.triangle_indices.get(),
                             sizeof(int16) * lengths[2])) {
-      LOG(ERROR) << "Failed to read indices for frame " << frame_count_;
+      LOG(ERROR) << "Failed to read indices for frame " << framevertex_denom_;
       return false;
     }
 
@@ -315,25 +315,26 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
 
     // Used for storing the vertex normals prior to averaging
     float vertex_normals_sum[lengths[0]];
-    float vertex_avg_denom[lengths[0]];
+    int vertex_denom[lengths[0]];
 
     // Compute every triangle surface normal and store them for averaging
     for (int idx = 0; idx < lengths[2]; idx += 3) {
-      int v1 = triangle_mesh.triangle_indices.get()[idx];
-      int v2 = triangle_mesh.triangle_indices.get()[idx + 1];
-      int v3 = triangle_mesh.triangle_indices.get()[idx + 2];
+      int v_idx[3];
+      v_idx[0] = triangle_mesh.triangle_indices.get()[idx];
+      v_idx[1] = triangle_mesh.triangle_indices.get()[idx + 1];
+      v_idx[2] = triangle_mesh.triangle_indices.get()[idx + 2];
       // (V1) vertex X,Y,Z indices in triangle_mesh.vertices
-      float V1x = triangle_mesh.vertices[v1 * 3];
-      float V1y = triangle_mesh.vertices[v1 * 3 + 1];
-      float V1z = triangle_mesh.vertices[v1 * 3 + 2];
+      float V1x = triangle_mesh.vertices[v_idx[0] * 3];
+      float V1y = triangle_mesh.vertices[v_idx[0] * 3 + 1];
+      float V1z = triangle_mesh.vertices[v_idx[0] * 3 + 2];
       // (V2) vertex X,Y,Z indices in triangle_mesh.vertices
-      float V2x = triangle_mesh.vertices[v2 * 3];
-      float V2y = triangle_mesh.vertices[v2 * 3 + 1];
-      float V2z = triangle_mesh.vertices[v2 * 3 + 2];
+      float V2x = triangle_mesh.vertices[v_idx[1] * 3];
+      float V2y = triangle_mesh.vertices[v_idx[1] * 3 + 1];
+      float V2z = triangle_mesh.vertices[v_idx[1] * 3 + 2];
       // (V3) vertex X,Y,Z indices in triangle_mesh.vertices
-      float V3x = triangle_mesh.vertices[v3 * 3];
-      float V3y = triangle_mesh.vertices[v3 * 3 + 1];
-      float V3z = triangle_mesh.vertices[v3 * 3 + 2];
+      float V3x = triangle_mesh.vertices[v_idx[2] * 3];
+      float V3y = triangle_mesh.vertices[v_idx[2] * 3 + 1];
+      float V3z = triangle_mesh.vertices[v_idx[2] * 3 + 2];
       // Calculate normals from vertices
       // V2 - V1
       float Ax = V2x - V1x;
@@ -347,35 +348,30 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       float normal_x = Ay * Bz - Az * By;
       float normal_y = Az * Bx - Ax * Bz;
       float normal_z = Ax * By - Ay * Bx;
+      // The normals calculated above must be normalized if we wish to prevent
+      // triangles with a larger surface area from dominating the normal
+      // calculations, however, none of our current models require this
+      // normalization.
+      
       // Add connected normal to each associated vertex
       // It is also necessary to increment each vertex denominator for averaging
-      vertex_normals_sum[v1 * 3] += normal_x;
-      vertex_normals_sum[v1 * 3 + 1] += normal_y;
-      vertex_normals_sum[v1 * 3 + 2] += normal_z;
-      vertex_avg_denom[v1 * 3] += 1;
-      vertex_avg_denom[v1 * 3 + 1] += 1;
-      vertex_avg_denom[v1 * 3 + 2] += 1;
-      vertex_normals_sum[v2 * 3] += normal_x;
-      vertex_normals_sum[v2 * 3 + 1] += normal_y;
-      vertex_normals_sum[v2 * 3 + 2] += normal_z;
-      vertex_avg_denom[v2 * 3] += 1;
-      vertex_avg_denom[v2 * 3 + 1] += 1;
-      vertex_avg_denom[v2 * 3 + 2] += 1;
-      vertex_normals_sum[v3 * 3] += normal_x;
-      vertex_normals_sum[v3 * 3 + 1] += normal_y;
-      vertex_normals_sum[v3 * 3 + 2] += normal_z;
-      vertex_avg_denom[v3 * 3] += 1;
-      vertex_avg_denom[v3 * 3 + 1] += 1;
-      vertex_avg_denom[v3 * 3 + 2] += 1;
+      for (int i = 0; i < 3; i++) {
+        vertex_normals_sum[v_idx[i] * 3] += normal_x;
+        vertex_normals_sum[v_idx[i] * 3 + 1] += normal_y;
+        vertex_normals_sum[v_idx[i] * 3 + 2] += normal_z;
+        vertex_denom[v_idx[i] * 3]++;
+        vertex_denom[v_idx[i] * 3 + 1]++;
+        vertex_denom[v_idx[i] * 3 + 2]++;
+      }
     }
 
     // Combine all triangle normals connected to each vertex by adding the X,Y,Z
     // value of each adjacent triangle surface normal to every vertex and then
     // averaging the combined value.
     for (int idx = 0; idx < lengths[0]; idx += 3) {
-      float normal_x = vertex_normals_sum[idx] / vertex_avg_denom[idx];
-      float normal_y = vertex_normals_sum[idx + 1] / vertex_avg_denom[idx + 1];
-      float normal_z = vertex_normals_sum[idx + 2] / vertex_avg_denom[idx + 2];
+      float normal_x = vertex_normals_sum[idx] / vertex_denom[idx];
+      float normal_y = vertex_normals_sum[idx + 1] / vertex_denom[idx + 1];
+      float normal_z = vertex_normals_sum[idx + 2] / vertex_denom[idx + 2];
       // Normalize the averaged normal and set triangle_mesh normals
       float product = normal_x * normal_x + normal_y * normal_y +
         normal_z * normal_z;
@@ -385,11 +381,11 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       triangle_mesh.normals.get()[idx + 2] = normal_z / magnitude;
     }
 
-    frame_count_++;
+    framevertex_denom_++;
   }
   AAsset_close(asset);
 
-  LOG(INFO) << "Finished parsing " << frame_count_ << " animation frames.";
+  LOG(INFO) << "Finished parsing " << framevertex_denom_ << " animation frames.";
   if (meshes->empty()) {
     LOG(ERROR) << "No animation frames were parsed!  Erroring out calculator.";
     return false;
@@ -406,7 +402,7 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
     return false;
   }
 
-  frame_count_ = 0;
+  framevertex_denom_ = 0;
   int32 lengths[3];
   while (true) {
     // See if we have more initial size counts to read in.
@@ -425,7 +421,7 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
     infile.read((char *)(triangle_mesh.vertices.get()),
                 sizeof(float) * lengths[0]);
     if (!infile) {
-      LOG(ERROR) << "Failed to read vertices for frame " << frame_count_;
+      LOG(ERROR) << "Failed to read vertices for frame " << framevertex_denom_;
       return false;
     }
 
@@ -435,24 +431,24 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
                 sizeof(float) * lengths[1]);
     if (!infile) {
       LOG(ERROR) << "Failed to read texture coordinates for frame "
-                 << frame_count_;
+                 << framevertex_denom_;
       return false;
     }
 
     // Try to read in the triangle indices (2-byte shorts)
-    triangle_mesh.index_count = lengths[2];
+    triangle_mesh.indexvertex_denom = lengths[2];
     triangle_mesh.triangle_indices.reset(new int16[lengths[2]]);
     infile.read((char *)(triangle_mesh.triangle_indices.get()),
                 sizeof(int16) * lengths[2]);
     if (!infile) {
       LOG(ERROR) << "Failed to read triangle indices for frame "
-                 << frame_count_;
+                 << framevertex_denom_;
       return false;
     }
-    frame_count_++;
+    framevertex_denom_++;
   }
 
-  LOG(INFO) << "Finished parsing " << frame_count_ << " animation frames.";
+  LOG(INFO) << "Finished parsing " << framevertex_denom_ << " animation frames.";
   if (robot_triangle_meshes_.empty()) {
     LOG(ERROR) << "No animation frames were parsed!  Erroring out calculator.";
     return false;
@@ -540,7 +536,7 @@ int GlAnimationOverlayCalculator::GetAnimationFrameIndex(Timestamp timestamp) {
   double seconds_delta = timestamp.Seconds() - animation_start_time_.Seconds();
   int64_t frame_index =
       static_cast<int64_t>(seconds_delta * animation_speed_fps_);
-  frame_index %= frame_count_;
+  frame_index %= framevertex_denom_;
   return static_cast<int>(frame_index);
 }
 
@@ -785,10 +781,8 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       // pixel, this allows the rendering of transparent background GIFs
       if (pixel.a < 0.2) discard;
 
-      // Convert pixel to 3D for lighting procedure
-      vec3 pixelPos = vec3(gl_FragCoord);
       // Generate directional lighting effect
-      vec3 lighting = GetDirectionalLight(pixelPos, vNormal, viewDir, lightDir, kLightColor, kExponent);
+      vec3 lighting = GetDirectionalLight(gl_FragCoord.xyz, vNormal, viewDir, lightDir, kLightColor, kExponent);
       // Apply both ambient and directional lighting to our texture
       gl_FragColor = vec4((vec3(kAmbientLighting) + lighting) * pixel.rgb, 1.0);
     }
@@ -847,7 +841,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
 ::mediapipe::Status GlAnimationOverlayCalculator::GlRender(
     const TriangleMesh &triangle_mesh, const float *model_matrix) {
   GLCHECK(glUniformMatrix4fv(model_matrix_uniform_, 1, GL_FALSE, model_matrix));
-  GLCHECK(glDrawElements(GL_TRIANGLES, triangle_mesh.index_count,
+  GLCHECK(glDrawElements(GL_TRIANGLES, triangle_mesh.indexvertex_denom,
                          GL_UNSIGNED_SHORT,
                          triangle_mesh.triangle_indices.get()));
   return ::mediapipe::OkStatus();
