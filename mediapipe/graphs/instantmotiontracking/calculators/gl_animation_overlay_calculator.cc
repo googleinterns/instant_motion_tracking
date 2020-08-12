@@ -317,7 +317,7 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     float vertex_normals_sum[lengths[0]];
     float vertex_avg_denom[lengths[0]];
 
-    // Compute every triangle surface normal and store them for later use.
+    // Compute every triangle surface normal and store them for averaging
     for (int idx = 0; idx < lengths[2]; idx += 3) {
       int v1 = triangle_mesh.triangle_indices.get()[idx];
       int v2 = triangle_mesh.triangle_indices.get()[idx + 1];
@@ -347,7 +347,6 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       float normal_x = Ay * Bz - Az * By;
       float normal_y = Az * Bx - Ax * Bz;
       float normal_z = Ax * By - Ay * Bx;
-
       // Add connected normal to each associated vertex
       // It is also necessary to increment each vertex denominator for averaging
       vertex_normals_sum[v1 * 3] += normal_x;

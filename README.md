@@ -121,7 +121,7 @@ node {
 node {
   calculator: "MatricesManagerCalculator"
   input_stream: "ANCHORS:tracked_anchor_data"
-  input_stream: "IMU_ROTATIONS:imu_rotation_matrix"
+  input_stream: "IMU_ROTATION:imu_rotation_matrix"
   input_stream: "USER_ROTATIONS:user_rotation_data"
   input_stream: "USER_SCALINGS:user_scaling_data"
   input_stream: "RENDER_DATA:sticker_render_data"

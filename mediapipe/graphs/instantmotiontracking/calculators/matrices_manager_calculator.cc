@@ -72,7 +72,7 @@ namespace {
 // node{
 //  calculator: "MatricesManagerCalculator"
 //  input_stream: "ANCHORS:tracked_scaled_anchor_data"
-//  input_stream: "IMU_ROTATIONS:imu_rotation_matrix"
+//  input_stream: "IMU_ROTATION:imu_rotation_matrix"
 //  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "USER_SCALINGS:user_scaling_data"
 //  output_stream: "MATRICES:0:first_render_matrices"
