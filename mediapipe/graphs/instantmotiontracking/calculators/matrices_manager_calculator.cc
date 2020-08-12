@@ -185,9 +185,8 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
           .Tag(kAnchorsTag)
           .Get<std::vector<Anchor>>();
 
-  const auto imu_matrix = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>();
-
   // Device IMU rotation submatrix
+  const auto imu_matrix = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>();
   Matrix3f imu_rotation_submatrix;
   int idx = 0;
   for (int x = 0; x < 3; x++) {
