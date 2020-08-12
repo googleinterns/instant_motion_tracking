@@ -69,7 +69,8 @@ public class Sticker {
     // Sticker will render out of view by default
     this.setNewAnchor(2.0f, 2.0f);
     // Set the global sticker ID limit for the next sticker
-    stickerID = (Sticker.globalIDLimit++);  }
+    stickerID = (Sticker.globalIDLimit++);  
+  }
 
   /** Return sticker ID integer. * */
   public int getStickerID() {
