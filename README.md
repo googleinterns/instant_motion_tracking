@@ -39,12 +39,14 @@ It is also necessary move the Android source application to Mediapipe:
 mv instant_motion_tracking/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking mediapipe/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking
 ```
 
-A new WORKSPACE file with Glide Image Loading is necessary and can be transferred from the instantmotiontracking project to the mediapipe directory via the command here:
+Navigate to the mediapipe directory containing your WORKSPACE file and use the following commands to add Glide Image Loading dependencies to the Maven installation section: 
 
 ```bash
-mv instant_motion_tracking/installation/WORKSPACE mediapipe/WORKSPACE
-# If you wish to use your own WORKSPACE file from a previous MediaPipe project, you can alternatively copy the following two 
-# dependencies to the 'artifacts' portion of maven_install:
+sed -i '/"com.google.guava:guava:27.0.1-android",/a "com.github.bumptech.glide:glide:4.11.0",' WORKSPACE 
+
+sed -i '/"com.github.bumptech.glide:glide:4.11.0",/a "com.github.bumptech.glide:gifdecoder:4.11.0",' WORKSPACE 
+
+# If you wish to avoid running the commands above (or run into issues), you can alternatively copy the following two dependencies to the 'artifacts' portion of maven_install:
 #
 # artifacts = [
 # 	...
@@ -63,6 +65,7 @@ Now, navigate to the MediaPipe directory and build the application via Bazel:
 
 ```bash
 cd mediapipe
+
 bazel build -c opt --config=android_arm64 mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking
 ```
 
