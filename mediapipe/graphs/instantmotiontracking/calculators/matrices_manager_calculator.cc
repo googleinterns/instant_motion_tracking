@@ -35,7 +35,7 @@ namespace {
   using Matrix3f = Eigen::Matrix3f;
   using DiagonalMatrix3f = Eigen::DiagonalMatrix<float, 3>;
   constexpr char kAnchorsTag[] = "ANCHORS";
-  constexpr char kIMUDataTag[] = "IMU_DATA";
+  constexpr char kIMUMatrixTag[] = "IMU_ROTATION";
   constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
   constexpr char kUserScalingsTag[] = "USER_SCALINGS";
   constexpr char kRendersTag[] = "RENDER_DATA";
@@ -62,7 +62,7 @@ namespace {
 //  ANCHORS - Anchor data with x,y,z coordinates (x,y are in [0.0-1.0] range for
 //    position on the device screen, while z is the scaling factor that changes
 //    in proportion to the distance from the tracked region) [REQUIRED]
-//  IMU_DATA - float[3] of [roll, pitch, yaw] of device [REQUIRED]
+//  IMU_ROTATION - float[9] of row-major device rotation matrix [REQUIRED]
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
 // Output:
@@ -72,7 +72,7 @@ namespace {
 // node{
 //  calculator: "MatricesManagerCalculator"
 //  input_stream: "ANCHORS:tracked_scaled_anchor_data"
-//  input_stream: "IMU_DATA:imu_data"
+//  input_stream: "IMU_ROTATION:imu_rotation_matrix"
 //  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "USER_SCALINGS:user_scaling_data"
 //  output_stream: "MATRICES:0:first_render_matrices"
@@ -92,7 +92,6 @@ class MatricesManagerCalculator : public CalculatorBase {
     const Matrix4fCM GenerateEigenModelMatrix(const Vector3f translation_vector,
       const Matrix3f rotation_submatrix);
     const Vector3f GenerateAnchorVector(const Anchor tracked_anchor);
-    const Matrix3f GenerateIMURotationSubmatrix(const float yaw, const float pitch, const float roll);
 
     // Returns a user scaling increment associated with the sticker_id
     // TODO: Adjust lookup function if total number of stickers is uncapped to improve performance
@@ -112,20 +111,17 @@ class MatricesManagerCalculator : public CalculatorBase {
       }
     }
 
-    // TODO: Initial sticker setup based on ID (default rotation, scale, etc.) should
-    // be built into the sticker pipeline
-
     // This returns a scale factor by which to alter the projection matrix for
     // the specified render id in order to ensure all objects render at a similar
     // size in the view screen upon initial placement
     const float GetDefaultRenderScale(const int render_id) {
-      if(render_id == 0) { // Robot
+      if (render_id == 0) { // Robot
         return 5.0f;
       }
-      else if(render_id == 1) { // Dino
+      else if (render_id == 1) { // Dino
         return 0.75f;
       }
-      else if(render_id == 2) { // GIF
+      else if (render_id == 2) { // GIF
         return 160.0f;
       }
     }
@@ -136,14 +132,14 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
 ::mediapipe::Status MatricesManagerCalculator::GetContract(
     CalculatorContract* cc) {
   RET_CHECK(cc->Inputs().HasTag(kAnchorsTag)
-    && cc->Inputs().HasTag(kIMUDataTag)
+    && cc->Inputs().HasTag(kIMUMatrixTag)
     && cc->Inputs().HasTag(kUserRotationsTag)
     && cc->Inputs().HasTag(kUserScalingsTag)
     && cc->InputSidePackets().HasTag(kFOVSidePacketTag)
     && cc->InputSidePackets().HasTag(kAspectRatioSidePacketTag));
 
   cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-  cc->Inputs().Tag(kIMUDataTag).Set<float[]>();
+  cc->Inputs().Tag(kIMUMatrixTag).Set<float[]>();
   cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
   cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
   cc->Inputs().Tag(kRendersTag).Set<std::vector<int>>();
@@ -189,12 +185,17 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
           .Tag(kAnchorsTag)
           .Get<std::vector<Anchor>>();
 
-  // Device IMU Data definitions
-  const float yaw = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[0];
-  const float pitch = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[1];
-  const float roll = cc->Inputs().Tag(kIMUDataTag).Get<float[]>()[2];
-  // We can pre-generate the IMU submatrix as this remains unchanged for all objects
-  const Matrix3f imu_rotation_submatrix = GenerateIMURotationSubmatrix(yaw, pitch, roll);
+  // Device IMU rotation submatrix
+  const auto imu_matrix = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>();
+  Matrix3f imu_rotation_submatrix;
+  int idx = 0;
+  for (int x = 0; x < 3; x++) {
+    for (int y = 0; y < 3; y++) {
+      // Input matrix is row-major matrix, it must be reformatted to column-major
+      // via transpose procedure
+      imu_rotation_submatrix(y, x) = imu_matrix[idx++];
+    }
+  }
 
   int render_idx = 0;
   for (const Anchor &anchor : anchor_data) {
@@ -215,7 +216,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
 
     model_matrix->set_id(id);
 
-    // The user transformation data associate with this sticker must be defined
+    // The user transformation data associated with this sticker must be defined
     const float user_rotation_radians = GetUserRotation(user_rotation_data, id);
     const float user_scale_factor = GetUserScaler(user_scaling_data, id);
     // We can also get the initial scaling factor based on the preset factor for this render id
@@ -268,7 +269,11 @@ const Matrix3f MatricesManagerCalculator::GenerateUserRotationMatrix(const float
         // with the direction of finger movement from the user (system dependent)
         Eigen::AngleAxisf(-rotation_radians, Eigen::Vector3f::UnitY()) *
         Eigen::AngleAxisf(0.0f, Eigen::Vector3f::UnitZ()) *
-        Eigen::AngleAxisf(0.0f, Eigen::Vector3f::UnitX());
+        // Model orientations all assume z-axis is up, but we need y-axis upwards,
+        // therefore, a +(M_PI * 0.5f) transformation must be applied
+        // TODO: Bring default rotations, translations, and scalings into independent
+        // sticker configuration
+        Eigen::AngleAxisf(M_PI * 0.5f, Eigen::Vector3f::UnitX());
   // Matrix must be transposed due to the method of submatrix generation in Eigen
   return user_rotation_submatrix.transpose();
 }
@@ -304,28 +309,6 @@ const Vector3f MatricesManagerCalculator::GenerateAnchorVector(const Anchor trac
   // A translation transformation vector can be generated via Eigen
   const Vector3f t_vector(x,y,z);
   return t_vector;
-}
-
-// Using the yaw, pitch, and roll, a rotation submatrix can be generated,
-// universal to each object appearing in the device view
-const Matrix3f MatricesManagerCalculator::GenerateIMURotationSubmatrix(
-  const float yaw, const float pitch, const float roll) {
-  Eigen::Matrix3f r_submatrix;
-  // Rotation angles are passed in clockwise, so we must negate the rotations in
-  // order to rotate the object to match
-    r_submatrix =
-        // The yaw value is associated with the Y-axis.
-        Eigen::AngleAxisf(-yaw, Eigen::Vector3f::UnitY()) *
-        // The roll value is associated with the Z-axis.
-        Eigen::AngleAxisf(-roll, Eigen::Vector3f::UnitZ()) *
-        // The pitch value is associated with the X-axis.
-        // The (-M_PI * 0.5f) must be added in order to adjust the default
-        // rendering of the object (the object should appear in the upright
-        // orientation upon initial render of the scene - this is entirely
-        // dependent on the construction of the .obj file).
-        Eigen::AngleAxisf(-pitch - (M_PI * 0.5f), Eigen::Vector3f::UnitX());
-    // Matrix must be transposed due to the method of submatrix generation in Eigen
-    return r_submatrix.transpose();
 }
 
 // Generates a model matrix via Eigen with appropriate transformations

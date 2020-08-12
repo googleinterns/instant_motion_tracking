@@ -7,7 +7,7 @@ using MediaPipe.
 
 This document focuses on the [below graph](#main-graph) that performs instant motion tracking.
 
-For overall context on instant motion tracking, please read this [Google Developers Blog - TODO](#).
+For overall context on instant motion tracking, please read this [paper](https://arxiv.org/abs/1907.06796).
 
 ![instant_motion_tracking_android_gif1](images/demo_1.gif) ![instant_motion_tracking_android_gif2](images/demo_2.gif)
 
@@ -27,12 +27,6 @@ Once you have the MediaPipe repository, clone this project as well:
 git clone https://github.com/googleinterns/instant_motion_tracking.git
 ```
 
-Due to BUILD dependency issues with related MediaPipe projects, you must change the visibility permissions of the object_tracking_3d calculators. Run the command below to copy the modified BUILD file to fix privacy issues between projects:
-
-```base
-mv instant_motion_tracking/mediapipe/graphs/instantmotiontracking/calculators/obj3d/BUILD mediapipe/mediapipe/graphs/object_detection_3d/calculators/BUILD
-```
-
 Next, run the following command to move the instantmotiontracking source graphs and calculators into the MediaPipe directory:
 
 ```bash
@@ -45,13 +39,37 @@ It is also necessary move the Android source application to Mediapipe:
 mv instant_motion_tracking/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking mediapipe/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking
 ```
 
-Now, navigate to the MediaPipe directory and run the following command to build the application with Bazel
+Due to BUILD dependency issues with related MediaPipe projects, you must change the visibility permissions of the object_tracking_3d calculators. Run the command below to copy the modified BUILD file to fix privacy issues between projects:
+
+```base
+mv instant_motion_tracking/installation/BUILD mediapipe/mediapipe/graphs/object_detection_3d/calculators/BUILD
+```
+
+Navigate to the mediapipe directory containing your WORKSPACE file and use the following commands to add Glide Image Loading dependencies to the Maven installation section: 
+
+```bash
+cd mediapipe
+
+sed -i '/"com.google.guava:guava:27.0.1-android",/a "com.github.bumptech.glide:glide:4.11.0",' WORKSPACE 
+
+sed -i '/"com.github.bumptech.glide:glide:4.11.0",/a "com.github.bumptech.glide:gifdecoder:4.11.0",' WORKSPACE 
+
+# If you wish to avoid running the commands above (or run into issues), you can alternatively copy the following two dependencies to the 'artifacts' portion of maven_install:
+#
+# artifacts = [
+# 	...
+# 	"com.github.bumptech.glide:glide:4.11.0",
+# 	"com.github.bumptech.glide:gifdecoder:4.11.0",
+# ]
+```
+
+Now the application can be built via Bazel:
 
 ```bash
 bazel build -c opt --config=android_arm64 mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking
 ```
 
-Once the app is built, install it on an Android device with ('install -r' if for reinstall with retained app data):
+Once the app is built, install it on an Android device by transferring the apk via ADB:
 
 ```bash
 adb install bazel-bin/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/instantmotiontracking.apk
@@ -72,15 +90,17 @@ in order to perform anchor tracking for each individual 3d render (creating the 
 
 # Images in/out of graph with sticker data and IMU information from device
 input_stream: "input_video"
-input_stream: "sticker_data_string"
-input_stream: "imu_data"
+input_stream: "sticker_sentinel"
+input_stream: "sticker_proto_string"
+input_stream: "imu_rotation_matrix"
+input_stream: "gif_texture"
 output_stream: "output_video"
 
 # Converts sticker data into user data (rotations/scalings), render data, and
 # initial anchors.
 node {
   calculator: "StickerManagerCalculator"
-  input_stream: "STRING:sticker_data_string"
+  input_stream: "PROTO:sticker_proto_string"
   output_stream: "ANCHORS:initial_anchor_data"
   output_stream: "USER_ROTATIONS:user_rotation_data"
   output_stream: "USER_SCALINGS:user_scaling_data"
@@ -91,47 +111,55 @@ node {
 node {
   calculator: "RegionTrackingSubgraph"
   input_stream: "VIDEO:input_video"
+  input_stream: "SENTINEL:sticker_sentinel"
   input_stream: "ANCHORS:initial_anchor_data"
-  output_stream: "ANCHORS:tracked_scaled_anchor_data"
-}
-
-# Finalizes all translation data and converts coordinates from normalized device
-# system to OpenGL coordinates.
-node {
-  calculator: "TranslationManagerCalculator"
-  input_stream: "ANCHORS:tracked_scaled_anchor_data"
-  input_stream: "USER_SCALINGS:user_scaling_data"
-  output_stream: "TRANSLATION_DATA:final_translation_data"
-}
-
-# Finalizes all rotation data and integrates IMU information into individual
-# sticker rotation data.
-node {
-  calculator: "RotationManagerCalculator"
-  input_stream: "IMU_DATA:imu_data"
-  input_stream: "USER_ROTATIONS:user_rotation_data"
-  output_stream: "ROTATION_DATA:final_rotation_data"
+  output_stream: "ANCHORS:tracked_anchor_data"
 }
 
 # Concatenates all transformations to generate model matrices for the OpenGL
 # animation overlay calculator.
 node {
   calculator: "MatricesManagerCalculator"
-  input_stream: "TRANSLATION_DATA:final_translation_data"
-  input_stream: "ROTATION_DATA:final_rotation_data"
-  output_stream: "MODEL_MATRICES:model_matrices"
+  input_stream: "ANCHORS:tracked_anchor_data"
+  input_stream: "IMU_ROTATION:imu_rotation_matrix"
+  input_stream: "USER_ROTATIONS:user_rotation_data"
+  input_stream: "USER_SCALINGS:user_scaling_data"
+  input_stream: "RENDER_DATA:sticker_render_data"
+  output_stream: "MATRICES:0:robot_matrices"
+  output_stream: "MATRICES:1:dino_matrices"
+  output_stream: "MATRICES:2:gif_matrices"
+  input_side_packet: "FOV:vertical_fov_radians"
+  input_side_packet: "ASPECT_RATIO:aspect_ratio"
 }
 
 # Renders the final 3d stickers and overlays them on input image.
 node {
   calculator: "GlAnimationOverlayCalculator"
   input_stream: "VIDEO:input_video"
-  input_stream: "MODEL_MATRICES:model_matrices"
+  input_stream: "MODEL_MATRICES:robot_matrices"
+  input_side_packet: "TEXTURE:robot_texture"
+  input_side_packet: "ASSET:robot_asset_name"
+  output_stream: "robot_rendered_video"
+}
+
+# Renders the final 3d stickers and overlays them on input image.
+node {
+  calculator: "GlAnimationOverlayCalculator"
+  input_stream: "VIDEO:robot_rendered_video"
+  input_stream: "MODEL_MATRICES:dino_matrices"
+  input_side_packet: "TEXTURE:dino_texture"
+  input_side_packet: "ASSET:dino_asset_name"
+  output_stream: "dino_rendered_video"
+}
+
+# Renders the final 3d stickers and overlays them on input image.
+node {
+  calculator: "GlAnimationOverlayCalculator"
+  input_stream: "VIDEO:dino_rendered_video"
+  input_stream: "MODEL_MATRICES:gif_matrices"
+  input_stream: "TEXTURE:gif_texture"
+  input_side_packet: "ASSET:gif_asset_name"
   output_stream: "output_video"
-  input_side_packet: "TEXTURE:box_texture"
-  input_side_packet: "ANIMATION_ASSET:box_asset_name"
-  input_side_packet: "MASK_TEXTURE:obj_texture"
-  input_side_packet: "MASK_ASSET:obj_asset_name"
 }
 ```
 
@@ -148,12 +176,14 @@ node {
 # Images in/out of graph with tracked and scaled normalized anchor data
 type: "RegionTrackingSubgraph"
 input_stream: "VIDEO:input_video"
+input_stream: "SENTINEL:sticker_sentinel"
 input_stream: "ANCHORS:initial_anchor_data"
 output_stream: "ANCHORS:tracked_scaled_anchor_data"
 
 # Manages the anchors and tracking if user changes/adds/deletes anchors
 node {
  calculator: "TrackedAnchorManagerCalculator"
+ input_stream: "SENTINEL:sticker_sentinel"
  input_stream: "ANCHORS:initial_anchor_data"
  input_stream: "BOXES:boxes"
  input_stream_info: {

@@ -22,6 +22,7 @@
 
 namespace mediapipe {
 
+constexpr char kSentinelTag[] = "SENTINEL";
 constexpr char kAnchorsTag[] = "ANCHORS";
 constexpr char kBoxesInputTag[] = "BOXES";
 constexpr char kBoxesOutputTag[] = "START_POS";
@@ -37,6 +38,8 @@ constexpr float kUsToMs = 1000.0f; // Used to convert from microseconds to milli
 // performance and remove all sticker artifacts
 //
 // Input:
+//  SENTINEL - ID of sticker which has an anchor that must be reset (-1 when no
+// anchor must be reset) [REQUIRED]
 //  ANCHORS - Initial anchor data (tracks changes and where to re/position) [REQUIRED]
 //  BOXES - Used in cycle, boxes being tracked meant to update positions [OPTIONAL
 //  - provided by subgraph]
@@ -48,6 +51,7 @@ constexpr float kUsToMs = 1000.0f; // Used to convert from microseconds to milli
 // Example config:
 // node {
 //   calculator: "TrackedAnchorManagerCalculator"
+//   input_stream: "SENTINEL:sticker_sentinel"
 //   input_stream: "ANCHORS:initial_anchor_data"
 //   input_stream: "BOXES:boxes"
 //   input_stream_info: {
@@ -61,24 +65,27 @@ constexpr float kUsToMs = 1000.0f; // Used to convert from microseconds to milli
 
 class TrackedAnchorManagerCalculator : public CalculatorBase {
 private:
-  std::vector<Anchor> previous_anchor_data_;
+  // Previous graph iteration anchor data
+  std::vector<Anchor> previous_anchor_data;
 
 public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
-    RET_CHECK(cc->Inputs().HasTag(kAnchorsTag));
+    RET_CHECK(cc->Inputs().HasTag(kAnchorsTag)
+      && cc->Inputs().HasTag(kSentinelTag));
     RET_CHECK(cc->Outputs().HasTag(kAnchorsTag)
       && cc->Outputs().HasTag(kBoxesOutputTag));
 
     cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
+    cc->Inputs().Tag(kSentinelTag).Set<int>();
 
-    if(cc->Inputs().HasTag(kBoxesInputTag)) {
+    if (cc->Inputs().HasTag(kBoxesInputTag)) {
       cc->Inputs().Tag(kBoxesInputTag).Set<TimedBoxProtoList>();
     }
 
     cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
     cc->Outputs().Tag(kBoxesOutputTag).Set<TimedBoxProtoList>();
 
-    if(cc->Outputs().HasTag(kCancelTag)) {
+    if (cc->Outputs().HasTag(kCancelTag)) {
       cc->Outputs().Tag(kCancelTag).Set<int>();
     }
 
@@ -86,7 +93,6 @@ public:
   }
 
   ::mediapipe::Status Open(CalculatorContext* cc) override {
-    cc->SetOffset(TimestampDiff(0));
     return ::mediapipe::OkStatus();
   }
 
@@ -95,71 +101,94 @@ public:
 REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
 
 ::mediapipe::Status TrackedAnchorManagerCalculator::Process(CalculatorContext* cc) {
+  mediapipe::Timestamp timestamp = cc->InputTimestamp();
+  const int sticker_sentinel = cc->Inputs().Tag(kSentinelTag).Get<int>();
   std::vector<Anchor> current_anchor_data = cc->Inputs().Tag(kAnchorsTag).Get<std::vector<Anchor>>();
-
   auto pos_boxes = absl::make_unique<TimedBoxProtoList>();
-
   std::vector<Anchor> tracked_scaled_anchor_data;
 
-  // Update from tracking system or add anchor to tracking system
-  for(const Anchor &previous_anchor : previous_anchor_data_) {
-    for(Anchor current_anchor : current_anchor_data) {
-      if(previous_anchor.sticker_id == current_anchor.sticker_id) {
-        // Check if anchor was repositioned by user, and reset tracking box
-        if(previous_anchor.x != current_anchor.x || previous_anchor.y != current_anchor.y) {
-          TimedBoxProto* box = pos_boxes->add_box();
-          box->set_left(current_anchor.x - kBoxEdgeSize * 0.5f);
-          box->set_right(current_anchor.x + kBoxEdgeSize * 0.5f);
-          box->set_top(current_anchor.y - kBoxEdgeSize * 0.5f);
-          box->set_bottom(current_anchor.y + kBoxEdgeSize * 0.5f);
-          box->set_id(current_anchor.sticker_id);
-          box->set_time_msec(cc->InputTimestamp().Microseconds() / kUsToMs);
-          current_anchor.z = 1.0; // Default value for normalized z (scale factor)
-        }
-        // If anchor was not repositioned, update the location from the tracking system if associated box exists
-        else if (cc->Inputs().HasTag(kBoxesInputTag)) {
-          const TimedBoxProtoList box_list = cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>();
-          for(const auto& box : box_list.box())
-          {
-            if(box.id() == current_anchor.sticker_id) {
-              // Get center x normalized coordinate [0.0-1.0]
-              current_anchor.x = (box.left() + box.right()) * 0.5f;
-
-              // Get center y normalized coordinate [0.0-1.0]
-              current_anchor.y = (box.top() + box.bottom()) * 0.5f;
-
-              // Get center z coordinate [z starts at normalized 1.0 and scales inversely with box-width]
-              // TODO: Look into issues with uniform scaling on x-axis and y-axis
-              current_anchor.z = kBoxEdgeSize / (box.right() - box.left());
-            }
-          }
-        }
-        tracked_scaled_anchor_data.emplace_back(current_anchor);
+  // Delete any boxes being tracked without an associated anchor
+  for (const TimedBoxProto& box : cc->Inputs().Tag(kBoxesInputTag)
+       .Get<TimedBoxProtoList>().box()) {
+    bool anchor_exists = false;
+    for (Anchor anchor : current_anchor_data) {
+      if (box.id() == anchor.sticker_id) {
+        anchor_exists = true;
         break;
       }
     }
-  }
-
-  mediapipe::Timestamp timestamp = cc->InputTimestamp();
-  // Delete all boxes that are artifacts from deleted anchors
-  for(const TimedBoxProto& box : cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>().box()) {
-    bool anchor_is_being_tracked = false;
-    for(Anchor point : tracked_scaled_anchor_data) {
-      if(box.id() == point.sticker_id) {
-        anchor_is_being_tracked = true;
-        break;
-      }
-    }
-    if(!anchor_is_being_tracked) {
-      // TODO: Pass in vector of boxes to prevent breaking of terms from SetOffset
+    if (!anchor_exists) {
       cc->Outputs().Tag(kCancelTag).AddPacket(MakePacket<int>(box.id()).At(timestamp++));
     }
   }
 
-  previous_anchor_data_ = current_anchor_data; // Set previous anchors for next iteration
+  // Perform tracking or updating for each anchor position
+  for (Anchor anchor : current_anchor_data) {
+    // Check if anchor position is being reset by user in this graph iteration
+    if (sticker_sentinel == anchor.sticker_id) {
+      // Delete associated tracking box
+      // TODO: BoxTrackingSubgraph should accept vector to avoid breaking timestamp rules
+      cc->Outputs().Tag(kCancelTag).AddPacket(MakePacket<int>(anchor.sticker_id).At(timestamp++));
+      // Add a tracking box
+      TimedBoxProto* box = pos_boxes->add_box();
+      box->set_left(anchor.x - kBoxEdgeSize * 0.5f);
+      box->set_right(anchor.x + kBoxEdgeSize * 0.5f);
+      box->set_top(anchor.y - kBoxEdgeSize * 0.5f);
+      box->set_bottom(anchor.y + kBoxEdgeSize * 0.5f);
+      box->set_id(anchor.sticker_id);
+      box->set_time_msec((timestamp++).Microseconds() / kUsToMs);
+      // Default value for normalized z (scale factor)
+      anchor.z = 1.0;
+    }
+    // Anchor position was not reset by user
+    else {
+      // Attempt to update anchor position from tracking subgraph (TimedBoxProto)
+      bool updated_from_tracker = false;
+      const TimedBoxProtoList box_list = cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>();
+      for (const auto& box : box_list.box())
+      {
+        if (box.id() == anchor.sticker_id) {
+          // Get center x normalized coordinate [0.0-1.0]
+          anchor.x = (box.left() + box.right()) * 0.5f;
+          // Get center y normalized coordinate [0.0-1.0]
+          anchor.y = (box.top() + box.bottom()) * 0.5f;
+          // Get center z coordinate [z starts at normalized 1.0 and scales 
+          // inversely with box-width]
+          // TODO: Look into issues with uniform scaling on x-axis and y-axis
+          anchor.z = kBoxEdgeSize / (box.right() - box.left());
+          updated_from_tracker = true;
+          break;
+        }
+      }
+      // If anchor position was not updated from tracker, create new tracking box
+      // at last recorded anchor coordinates. This will allow all current stickers
+      // to be tracked at approximately last location even if re-acquisitioning
+      // in the BoxTrackingSubgraph encounters errors
+      if (!updated_from_tracker) {
+        for (Anchor prev_anchor : previous_anchor_data) {
+          if (anchor.sticker_id == prev_anchor.sticker_id) {
+            anchor = prev_anchor;
+            TimedBoxProto* box = pos_boxes->add_box();
+            box->set_left(anchor.x - kBoxEdgeSize * 0.5f);
+            box->set_right(anchor.x + kBoxEdgeSize * 0.5f);
+            box->set_top(anchor.y - kBoxEdgeSize * 0.5f);
+            box->set_bottom(anchor.y + kBoxEdgeSize * 0.5f);
+            box->set_id(anchor.sticker_id);
+            box->set_time_msec((timestamp++).Microseconds() / kUsToMs);
+            // Default value for normalized z (scale factor)
+            anchor.z = 1.0;
+            break;
+          }
+        }
+      }
+    }
+    tracked_scaled_anchor_data.emplace_back(anchor);
+  }
+  // Set anchor data for next iteration
+  previous_anchor_data = tracked_scaled_anchor_data;
 
   cc->Outputs().Tag(kAnchorsTag).AddPacket(MakePacket<std::vector<Anchor>>(tracked_scaled_anchor_data).At(cc->InputTimestamp()));
-  cc->Outputs().Tag(kBoxesOutputTag).Add(pos_boxes.release(),cc->InputTimestamp());
+  cc->Outputs().Tag(kBoxesOutputTag).Add(pos_boxes.release(), cc->InputTimestamp());
 
   return ::mediapipe::OkStatus();
 }

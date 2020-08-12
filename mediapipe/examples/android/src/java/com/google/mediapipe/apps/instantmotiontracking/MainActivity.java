@@ -33,6 +33,7 @@ import android.util.Log;
 import android.util.Size;
 import android.view.inputmethod.InputMethodManager;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -107,7 +108,11 @@ public class MainActivity extends AppCompatActivity {
   private LinearLayout buttonLayout;
 
   private ArrayList<Sticker> stickerArrayList;
-  private Sticker currentSticker; // Sticker being edited
+  // Current sticker being edited by user
+  private Sticker currentSticker;
+  // Trip value used to determine sticker re-anchoring
+  private final String STICKER_SENTINEL_TAG = "sticker_sentinel";
+  private int stickerSentinel = -1;
 
   // Define parameters for 'reactivity' of object
   private final float ROTATION_SPEED = 5.0f;
@@ -121,39 +126,38 @@ public class MainActivity extends AppCompatActivity {
   private final String FOV_SIDE_PACKET_TAG = "vertical_fov_radians";
   private final String ASPECT_RATIO_SIDE_PACKET_TAG = "aspect_ratio";
 
-  private float[] imuData = new float[3]; // [roll,pitch,yaw]
+  private final String IMU_MATRIX_TAG = "imu_rotation_matrix";
+  private final int SENSOR_SAMPLE_DELAY = SensorManager.SENSOR_DELAY_FASTEST;
+  private float[] rotationMatrix = new float[9];
 
-  private static final String STICKER_PROTO_TAG = "sticker_proto_string";
-  private static final String IMU_DATA_TAG = "imu_data";
+  private final String STICKER_PROTO_TAG = "sticker_proto_string";
   // Assets for object rendering
   // All robot animation assets and tags
   // TODO: Grouping all tags and assets into a seperate structure
   // TODO: bitmaps are space heavy, try to use compressed like png/webp
   private Bitmap robotTexture = null;
-  private static final String ROBOT_TEXTURE = "robot_texture.bmp";
-  private static final String ROBOT_FILE = "robot.obj.uuu";
-  private static final String ROBOT_TEXTURE_TAG = "robot_texture";
-  private static final String ROBOT_ASSET_TAG = "robot_asset_name";
+  private final String ROBOT_TEXTURE = "robot_texture.bmp";
+  private final String ROBOT_FILE = "robot.obj.uuu";
+  private final String ROBOT_TEXTURE_TAG = "robot_texture";
+  private final String ROBOT_ASSET_TAG = "robot_asset_name";
   // All dino animation assets and tags
   private Bitmap dinoTexture = null;
-  private static final String DINO_TEXTURE = "dino_texture.bmp";
-  private static final String DINO_FILE = "dino.obj.uuu";
-  private static final String DINO_TEXTURE_TAG = "dino_texture";
-  private static final String DINO_ASSET_TAG = "dino_asset_name";
+  private final String DINO_TEXTURE = "dino_texture.bmp";
+  private final String DINO_FILE = "dino.obj.uuu";
+  private final String DINO_TEXTURE_TAG = "dino_texture";
+  private final String DINO_ASSET_TAG = "dino_asset_name";
   // All GIF animation assets and tags
   private GIFEditText editText;
-  private static final String GOOFY_TEST_GIF =
-    "http://media.tenor.com/images/bce26b3402f8c22452fb648ee2276ff2/tenor.gif";
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
   private int gifCurrentIndex = 0;
-  private static final int GIF_FRAME_RATE = 20; // 20 FPS
+  private final int GIF_FRAME_RATE = 20; // 20 FPS
   // last time the GIF was updated
   private long gifLastFrameUpdateMS = System.currentTimeMillis();
   private Bitmap defaultGIFTexture = null; // Texture sent if no gif available
-  private static final String DEFAULT_GIF_TEXTURE = "default_gif_texture.bmp";
-  private static final String GIF_FILE = "gif.obj.uuu";
-  private static final String GIF_TEXTURE_TAG = "gif_texture";
-  private static final String GIF_ASSET_TAG = "gif_asset_name";
+  private final String DEFAULT_GIF_TEXTURE = "default_gif_texture.bmp";
+  private final String GIF_FILE = "gif.obj.uuu";
+  private final String GIF_TEXTURE_TAG = "gif_texture";
+  private final String GIF_ASSET_TAG = "gif_asset_name";
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -200,9 +204,6 @@ public class MainActivity extends AppCompatActivity {
     PermissionHelper.checkAndRequestCameraPermissions(this);
 
     // Send loaded 3d render assets as side packets to graph
-
-    // Load a basic GIF for initialization of GIF assets
-    setGIFBitmaps(GOOFY_TEST_GIF);
     prepareDemoAssets();
     AndroidPacketCreator packetCreator = processor.getPacketCreator();
 
@@ -231,19 +232,18 @@ public class MainActivity extends AppCompatActivity {
 
     // TODO: Change to use ROTATION_VECTOR or non-deprecated IMU method
     SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-    List sensorList = sensorManager.getSensorList(Sensor.TYPE_ORIENTATION);
+    List sensorList = sensorManager.getSensorList(Sensor.TYPE_ROTATION_VECTOR);
     sensorManager.registerListener(new SensorEventListener() {
-
+      private float[] rotMatFromVec = new float[9];
       public void onAccuracyChanged(Sensor sensor, int accuracy) {}
       // Update procedure on sensor adjustment (phone changes orientation)
       public void onSensorChanged(SensorEvent event) {
-        // All values must be negated in order to adjust the object orientations
-        // to match the phone movement (passed into MatricesManagerCalculator)
-        imuData[0] = -(float) Math.toRadians(event.values[0]);
-        imuData[1] = -(float) Math.toRadians(event.values[1]);
-        imuData[2] = -(float) Math.toRadians(event.values[2]);
+        // Get the Rotation Matrix from the Rotation Vector
+        SensorManager.getRotationMatrixFromVector(rotMatFromVec, event.values);
+        // AXIS_MINUS_X is used to remap the rotation matrix for left hand rules in the MediaPipe graph
+        SensorManager.remapCoordinateSystem(rotMatFromVec, SensorManager.AXIS_MINUS_X, SensorManager.AXIS_Y, rotationMatrix);
       }
-    }, (Sensor) sensorList.get(0), SensorManager.SENSOR_DELAY_FASTEST);
+    }, (Sensor) sensorList.get(0), SENSOR_SAMPLE_DELAY);
 
     // Mechanisms for zoom, pinch, rotation, tap gestures (Basic single object manipulation
     buttonLayout = (LinearLayout) findViewById(R.id.button_layout);
@@ -258,7 +258,7 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // Use MotionEvent properties to interpret taps/rotations/scales
-  public boolean UITouchManager(MotionEvent event) {
+  private boolean UITouchManager(MotionEvent event) {
     if(currentSticker != null) {
       switch (event.getAction()) {
         // Detecting a single click for object re-anchoring
@@ -288,7 +288,7 @@ public class MainActivity extends AppCompatActivity {
 
   // If our fingers are moved in a rotation, then our rotation factor will change
   // by the sum of the rotation of both fingers in radians
-  public float calculateRotationRadians(MotionEvent event) {
+  private float calculateRotationRadians(MotionEvent event) {
     float tangentA =
             (float)
                     Math.atan2(
@@ -305,7 +305,7 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // If our finger-to-finger distance increased, so will our scaling.
-  public float getNewScaleFactor(MotionEvent event, float currentScaleFactor) {
+  private float getNewScaleFactor(MotionEvent event, float currentScaleFactor) {
     double new_distance =
             distance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
     double old_distance =
@@ -322,18 +322,21 @@ public class MainActivity extends AppCompatActivity {
     return currentScaleFactor;
   }
 
-  public void recordClick(MotionEvent event) {
+  private void recordClick(MotionEvent event) {
     float x = (event.getX() / constraintLayout.getWidth());
     float y = (event.getY() / constraintLayout.getHeight());
     currentSticker.setNewAnchor(x, y);
+    // Setting the stickerSentinel will reposition the sticker in the MediaPipe
+    // graph
+    stickerSentinel = currentSticker.getStickerID();
   }
 
-  public double distance(double x1, double y1, double x2, double y2) {
+  private double distance(double x1, double y1, double x2, double y2) {
     return Math.sqrt((y2 - y1) * (y2 - y1) + (x2 - x1) * (x2 - x1));
   }
 
   // Called whenever a button is clicked
-  public void refreshUI() {
+  private void refreshUI() {
     if(currentSticker != null) { // No sticker in view
         buttonLayout.removeAllViews();
         ImageButton deleteSticker = new ImageButton(this);
@@ -415,13 +418,22 @@ public class MainActivity extends AppCompatActivity {
                 refreshUI();
             }
         });
+        ImageButton clearStickers = new ImageButton(this);
+        setUIControlButtonDesign(clearStickers, R.drawable.baseline_clear_all_24);
+        clearStickers.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                stickerArrayList.clear();
+                refreshUI();
+            }
+        });
 
         buttonLayout.addView(addSticker);
+        buttonLayout.addView(clearStickers);
     }
   }
 
   // Sets ImageButton UI for Control Buttons (Delete, Add, Back)
-  public void setUIControlButtonDesign(ImageButton btn, int imageDrawable) {
+  private void setUIControlButtonDesign(ImageButton btn, int imageDrawable) {
       btn.setImageDrawable(getResources().getDrawable(imageDrawable));
       btn.setBackgroundColor(Color.parseColor("#00ffffff"));
       btn.setLayoutParams(new LinearLayout.LayoutParams(200, 200));
@@ -430,7 +442,7 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // Sets ImageButton UI for Sticker Buttons
-  public void setStickerButtonDesign(ImageButton btn, int imageDrawable) {
+  private void setStickerButtonDesign(ImageButton btn, int imageDrawable) {
       btn.setImageDrawable(getResources().getDrawable(imageDrawable));
       btn.setBackground(getResources().getDrawable(R.drawable.circle_button));
       btn.setLayoutParams(new LinearLayout.LayoutParams(250, 250));
@@ -438,7 +450,7 @@ public class MainActivity extends AppCompatActivity {
       btn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
   }
 
-  public void setGIFBitmaps(String gif_url) {
+  private void setGIFBitmaps(String gif_url) {
     GIFBitmaps = new ArrayList<Bitmap>(); // Empty the bitmap array
     Glide.with(this).asGif().load(gif_url).into(new SimpleTarget<GifDrawable>() {
       @Override
@@ -454,12 +466,7 @@ public class MainActivity extends AppCompatActivity {
           StandardGifDecoder GIFDecoder = (StandardGifDecoder) decoder.get(frameLoader);
           for (int i = 0; i < GIFDecoder.getFrameCount(); i++) {
             GIFDecoder.advance();
-            Bitmap bmp = GIFDecoder.getNextFrame();
-            // Bitmaps must be flipped due to native acquisition of frames from Android OS
-            Matrix matrix = new Matrix();
-            matrix.preScale(-1.0f, 1.0f);
-            GIFBitmaps.add(Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(),
-              bmp.getHeight(), matrix, true));
+            GIFBitmaps.add(flipHorizontal(GIFDecoder.getNextFrame()));
           }
         }
         catch (Exception e) {
@@ -469,8 +476,17 @@ public class MainActivity extends AppCompatActivity {
     });
   }
 
+  // Bitmaps must be flipped due to native acquisition of frames from Android OS
+  private Bitmap flipHorizontal(Bitmap bmp) {
+    Matrix matrix = new Matrix();
+    // Flip Bitmap frames horizontally
+    matrix.preScale(-1.0f, 1.0f);
+    return Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(),
+      bmp.getHeight(), matrix, true);
+  }
+
   // Function that is continuously called in order to time GIF frame updates
-  public void updateGIFFrame() {
+  private void updateGIFFrame() {
     long millisPerFrame = 1000/GIF_FRAME_RATE;
     if(System.currentTimeMillis() - gifLastFrameUpdateMS >= millisPerFrame) {
       // Update GIF timestamp
@@ -481,14 +497,14 @@ public class MainActivity extends AppCompatActivity {
   }
 
   // Called once to popup the Keyboard via Android OS with focus set to editText
-  public void openKeyboard() {
+  private void openKeyboard() {
       editText.requestFocus();
       InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
       imm.showSoftInput(editText, InputMethodManager.SHOW_IMPLICIT);
   }
 
   // Called once to close the Keyboard via Android OS
-  public void closeKeyboard() {
+  private void closeKeyboard() {
       View view = this.getCurrentFocus();
       if (view != null) {
           InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -605,7 +621,7 @@ public class MainActivity extends AppCompatActivity {
 
     try {
       InputStream inputStream = getAssets().open(DEFAULT_GIF_TEXTURE);
-      defaultGIFTexture = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
+      defaultGIFTexture = flipHorizontal(BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions));
       inputStream.close();
     } catch (Exception e) {
       Log.e(TAG, "Error parsing object texture; error: " + e);
@@ -624,15 +640,20 @@ public class MainActivity extends AppCompatActivity {
       // Update to next GIF frame based on timing and frame rate
       updateGIFFrame();
 
-      // Initialize sticker data protobuffer packet information
+      Packet stickerSentinelPacket = processor.getPacketCreator().createInt32(stickerSentinel);
+      // Sticker sentinel value must be reset for next graph iteration
+      stickerSentinel = -1;
+      // Initialize sticker data protobufferpacket information
       Packet stickerProtoDataPacket = processor.getPacketCreator().createSerializedProto(Sticker.getMessageLiteData(stickerArrayList));
       // Define and set the IMU sensory information float array
-      Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(imuData);
+      Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(rotationMatrix);
       // Communicate GIF textures (dynamic texturing) to graph
       Packet gifTexturePacket = processor.getPacketCreator().createRgbaImageFrame(currentGIFBitmap);
+      processor.getGraph().addConsumablePacketToInputStream(STICKER_SENTINEL_TAG, stickerSentinelPacket, timestamp);
       processor.getGraph().addConsumablePacketToInputStream(STICKER_PROTO_TAG, stickerProtoDataPacket, timestamp);
-      processor.getGraph().addConsumablePacketToInputStream(IMU_DATA_TAG, imuDataPacket, timestamp);
+      processor.getGraph().addConsumablePacketToInputStream(IMU_MATRIX_TAG, imuDataPacket, timestamp);
       processor.getGraph().addConsumablePacketToInputStream(GIF_TEXTURE_TAG, gifTexturePacket, timestamp);
+      stickerSentinelPacket.release();
       stickerProtoDataPacket.release();
       imuDataPacket.release();
       gifTexturePacket.release();

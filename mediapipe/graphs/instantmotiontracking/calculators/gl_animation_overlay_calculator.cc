@@ -1,4 +1,4 @@
-// Copyright 2020 The MediaPipe Authors.
+// Copyright 2020 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <iostream>
 #endif
 
+#include <math.h>
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/port/ret_check.h"
 #include "mediapipe/framework/port/status.h"
@@ -47,7 +48,7 @@ typedef ImageFrame AssetTextureFormat;
 typedef GpuBuffer AssetTextureFormat;
 #endif
 
-enum { ATTRIB_VERTEX, ATTRIB_TEXTURE_POSITION, NUM_ATTRIBUTES };
+enum { ATTRIB_VERTEX, ATTRIB_TEXTURE_POSITION, ATTRIB_NORMAL, NUM_ATTRIBUTES };
 static const int kNumMatrixEntries = 16;
 // Loads a texture from an input side packet, and streams in an animation file
 // from a filename given in another input side packet, and renders the animation
@@ -93,6 +94,7 @@ static const int kNumMatrixEntries = 16;
 
 struct TriangleMesh {
   int index_count = 0;  // Needed for glDrawElements rendering call
+  std::unique_ptr<float[]> normals = nullptr;
   std::unique_ptr<float[]> vertices = nullptr;
   std::unique_ptr<float[]> texture_coords = nullptr;
   std::unique_ptr<int16[]> triangle_indices = nullptr;
@@ -291,6 +293,7 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       LOG(ERROR) << "Failed to read vertices for frame " << frame_count_;
       return false;
     }
+
     // Try to read in texture coordinates (4-byte floats)
     triangle_mesh.texture_coords.reset(new float[lengths[1]]);
     if (!ReadBytesFromAsset(asset, (void *)triangle_mesh.texture_coords.get(),
@@ -306,6 +309,78 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       LOG(ERROR) << "Failed to read indices for frame " << frame_count_;
       return false;
     }
+
+    // Set triangle_mesh normals for shader usage
+    triangle_mesh.normals.reset(new float[lengths[0]]);
+
+    // Used for storing the vertex normals prior to averaging
+    float vertex_normals_sum[lengths[0]];
+    int vertex_denom[lengths[0]];
+
+    // Compute every triangle surface normal and store them for averaging
+    for (int idx = 0; idx < lengths[2]; idx += 3) {
+      int v_idx[3];
+      v_idx[0] = triangle_mesh.triangle_indices.get()[idx];
+      v_idx[1] = triangle_mesh.triangle_indices.get()[idx + 1];
+      v_idx[2] = triangle_mesh.triangle_indices.get()[idx + 2];
+      // (V1) vertex X,Y,Z indices in triangle_mesh.vertices
+      float V1x = triangle_mesh.vertices[v_idx[0] * 3];
+      float V1y = triangle_mesh.vertices[v_idx[0] * 3 + 1];
+      float V1z = triangle_mesh.vertices[v_idx[0] * 3 + 2];
+      // (V2) vertex X,Y,Z indices in triangle_mesh.vertices
+      float V2x = triangle_mesh.vertices[v_idx[1] * 3];
+      float V2y = triangle_mesh.vertices[v_idx[1] * 3 + 1];
+      float V2z = triangle_mesh.vertices[v_idx[1] * 3 + 2];
+      // (V3) vertex X,Y,Z indices in triangle_mesh.vertices
+      float V3x = triangle_mesh.vertices[v_idx[2] * 3];
+      float V3y = triangle_mesh.vertices[v_idx[2] * 3 + 1];
+      float V3z = triangle_mesh.vertices[v_idx[2] * 3 + 2];
+      // Calculate normals from vertices
+      // V2 - V1
+      float Ax = V2x - V1x;
+      float Ay = V2y - V1y;
+      float Az = V2z - V1z;
+      // V3 - V1
+      float Bx = V3x - V1x;
+      float By = V3y - V1y;
+      float Bz = V3z - V1z;
+      // Calculate cross product
+      float normal_x = Ay * Bz - Az * By;
+      float normal_y = Az * Bx - Ax * Bz;
+      float normal_z = Ax * By - Ay * Bx;
+      // The normals calculated above must be normalized if we wish to prevent
+      // triangles with a larger surface area from dominating the normal
+      // calculations, however, none of our current models require this
+      // normalization.
+
+      // Add connected normal to each associated vertex
+      // It is also necessary to increment each vertex denominator for averaging
+      for (int i = 0; i < 3; i++) {
+        vertex_normals_sum[v_idx[i] * 3] += normal_x;
+        vertex_normals_sum[v_idx[i] * 3 + 1] += normal_y;
+        vertex_normals_sum[v_idx[i] * 3 + 2] += normal_z;
+        vertex_denom[v_idx[i] * 3]++;
+        vertex_denom[v_idx[i] * 3 + 1]++;
+        vertex_denom[v_idx[i] * 3 + 2]++;
+      }
+    }
+
+    // Combine all triangle normals connected to each vertex by adding the X,Y,Z
+    // value of each adjacent triangle surface normal to every vertex and then
+    // averaging the combined value.
+    for (int idx = 0; idx < lengths[0]; idx += 3) {
+      float normal_x = vertex_normals_sum[idx] / vertex_denom[idx];
+      float normal_y = vertex_normals_sum[idx + 1] / vertex_denom[idx + 1];
+      float normal_z = vertex_normals_sum[idx + 2] / vertex_denom[idx + 2];
+      // Normalize the averaged normal and set triangle_mesh normals
+      float product = normal_x * normal_x + normal_y * normal_y +
+        normal_z * normal_z;
+      float magnitude = sqrt(product);
+      triangle_mesh.normals.get()[idx] = normal_x / magnitude;
+      triangle_mesh.normals.get()[idx + 1] = normal_y / magnitude;
+      triangle_mesh.normals.get()[idx + 2] = normal_z / magnitude;
+    }
+
     frame_count_++;
   }
   AAsset_close(asset);
@@ -582,8 +657,9 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     }
 
     // Disable vertex attributes
-    GLCHECK(glEnableVertexAttribArray(ATTRIB_VERTEX));
-    GLCHECK(glEnableVertexAttribArray(ATTRIB_TEXTURE_POSITION));
+    GLCHECK(glDisableVertexAttribArray(ATTRIB_VERTEX));
+    GLCHECK(glDisableVertexAttribArray(ATTRIB_TEXTURE_POSITION));
+    GLCHECK(glDisableVertexAttribArray(ATTRIB_NORMAL));
 
     // Disable depth test
     GLCHECK(glDisable(GL_DEPTH_TEST));
@@ -611,10 +687,12 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
   const GLint attr_location[NUM_ATTRIBUTES] = {
       ATTRIB_VERTEX,
       ATTRIB_TEXTURE_POSITION,
+      ATTRIB_NORMAL,
   };
   const GLchar *attr_name[NUM_ATTRIBUTES] = {
       "position",
       "texture_coordinate",
+      "normal",
   };
 
   const GLchar *vert_src = R"(
@@ -626,36 +704,87 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
 
     // vertex position in threespace
     attribute vec4 position;
+    attribute vec3 normal;
 
     // texture coordinate for each vertex in normalized texture space (0..1)
     attribute mediump vec4 texture_coordinate;
 
     // texture coordinate for fragment shader (will be interpolated)
-    varying mediump vec2 sample_coordinate;
+    varying mediump vec2 sampleCoordinate;
+    varying mediump vec3 vNormal;
 
     void main() {
-      sample_coordinate = texture_coordinate.xy;
+      sampleCoordinate = texture_coordinate.xy;
       mat4 mvpMatrix = perspectiveMatrix * modelMatrix;
       gl_Position = mvpMatrix * position;
+
+      // TODO: Pass in rotation submatrix with no scaling or transforms to prevent
+      // breaking vNormal in case of model matrix having non-uniform scaling
+      vec4 tmpNormal = mvpMatrix * vec4(normal, 1.0);
+      vec4 transformedZero = mvpMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+      tmpNormal = tmpNormal - transformedZero;
+      vNormal = normalize(tmpNormal.xyz);
     }
   )";
 
   const GLchar *frag_src = R"(
     precision mediump float;
 
-    varying vec2 sample_coordinate;  // texture coordinate (0..1)
+    varying vec2 sampleCoordinate;  // texture coordinate (0..1)
+    varying vec3 vNormal;
     uniform sampler2D texture;  // texture to shade with
+    const float kPi = 3.14159265359;
+
+    // Define ambient lighting factor that is applied to our texture in order to
+    // generate ambient lighting of the scene on the object. Range is [0.0-1.0],
+    // with the factor being proportional to the brightness of the lighting in the
+    // scene being applied to the object
+    const float kAmbientLighting = 0.75;
+
+    // Define RGB values for light source
+    const vec3 kLightColor = vec3(0.25);
+    // Exponent for directional lighting that governs diffusion of surface light
+    const float kExponent = 1.0;
+    // Define direction of lighting effect source
+    const vec3 lightDir = vec3(0.0, -1.0, -0.6);
+    // Hard-coded view direction
+    const vec3 viewDir = vec3(0.0, 0.0, -1.0);
+
+    // DirectionalLighting procedure imported from Lullaby @ https://github.com/google/lullaby
+    // Calculate and return the color (diffuse and specular together) reflected by
+    // a directional light.
+    vec3 GetDirectionalLight(vec3 pos, vec3 normal, vec3 viewDir, vec3 lightDir, vec3 lightColor, float exponent) {
+      // Intensity of the diffuse light. Saturate to keep within the 0-1 range.
+      float normal_dot_light_dir = dot(normal, -lightDir);
+      float intensity = clamp(normal_dot_light_dir, 0.0, 1.0);
+      // Calculate the diffuse light
+      vec3 diffuse = intensity * lightColor;
+      // http://www.rorydriscoll.com/2009/01/25/energy-conservation-in-games/
+      float kEnergyConservation = (2.0 + exponent) / (2.0 * kPi);
+      vec3 reflect_dir = reflect(lightDir, normal);
+      // Intensity of the specular light
+      float view_dot_reflect = dot(-viewDir, reflect_dir);
+      // Use an epsilon for pow because pow(x,y) is undefined if x < 0 or x == 0
+      // and y <= 0 (GLSL Spec 8.2)
+      const float kEpsilon = 1e-5;
+      intensity = kEnergyConservation * pow(clamp(view_dot_reflect, kEpsilon, 1.0),
+       exponent);
+      // Specular color:
+      vec3 specular = intensity * lightColor;
+      return diffuse + specular;
+    }
 
     void main() {
       // Sample the texture, retrieving an rgba pixel value
-      vec4 pixel = texture2D(texture, sample_coordinate);
-
+      vec4 pixel = texture2D(texture, sampleCoordinate);
       // If the alpha (background) value is near transparent, then discard the
       // pixel, this allows the rendering of transparent background GIFs
       if (pixel.a < 0.2) discard;
 
-      // Set the fragment color to the transformed pixel
-      gl_FragColor = pixel;
+      // Generate directional lighting effect
+      vec3 lighting = GetDirectionalLight(gl_FragCoord.xyz, vNormal, viewDir, lightDir, kLightColor, kExponent);
+      // Apply both ambient and directional lighting to our texture
+      gl_FragColor = vec4((vec3(kAmbientLighting) + lighting) * pixel.rgb, 1.0);
     }
   )";
 
@@ -689,9 +818,15 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
   GLCHECK(glVertexAttribPointer(ATTRIB_VERTEX, 3, GL_FLOAT, 0, 0,
                                 triangle_mesh.vertices.get()));
   GLCHECK(glEnableVertexAttribArray(ATTRIB_VERTEX));
+
   GLCHECK(glVertexAttribPointer(ATTRIB_TEXTURE_POSITION, 2, GL_FLOAT, 0, 0,
                                 triangle_mesh.texture_coords.get()));
   GLCHECK(glEnableVertexAttribArray(ATTRIB_TEXTURE_POSITION));
+
+  GLCHECK(glVertexAttribPointer(ATTRIB_NORMAL, 3, GL_FLOAT, 0, 0,
+                                triangle_mesh.normals.get()));
+  GLCHECK(glEnableVertexAttribArray(ATTRIB_NORMAL));
+
   GLCHECK(glActiveTexture(GL_TEXTURE1));
   GLCHECK(glBindTexture(texture.target(), texture.name()));
 
