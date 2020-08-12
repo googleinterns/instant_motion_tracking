@@ -355,14 +355,12 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       vertex_avg_denom[v1 * 3] += 1;
       vertex_avg_denom[v1 * 3 + 1] += 1;
       vertex_avg_denom[v1 * 3 + 2] += 1;
-
       vertex_normals_sum[v2 * 3] += normal_x;
       vertex_normals_sum[v2 * 3 + 1] += normal_y;
       vertex_normals_sum[v2 * 3 + 2] += normal_z;
       vertex_avg_denom[v2 * 3] += 1;
       vertex_avg_denom[v2 * 3 + 1] += 1;
       vertex_avg_denom[v2 * 3 + 2] += 1;
-
       vertex_normals_sum[v3 * 3] += normal_x;
       vertex_normals_sum[v3 * 3 + 1] += normal_y;
       vertex_normals_sum[v3 * 3 + 2] += normal_z;
