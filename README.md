@@ -39,6 +39,12 @@ It is also necessary move the Android source application to Mediapipe:
 mv instant_motion_tracking/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking mediapipe/mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking
 ```
 
+Due to BUILD dependency issues with related MediaPipe projects, you must change the visibility permissions of the object_tracking_3d calculators. Run the command below to copy the modified BUILD file to fix privacy issues between projects:
+
+```base
+mv instant_motion_tracking/installation/BUILD mediapipe/mediapipe/graphs/object_detection_3d/calculators/BUILD
+```
+
 Navigate to the mediapipe directory containing your WORKSPACE file and use the following commands to add Glide Image Loading dependencies to the Maven installation section: 
 
 ```bash
@@ -57,19 +63,9 @@ sed -i '/"com.github.bumptech.glide:glide:4.11.0",/a "com.github.bumptech.glide:
 # ]
 ```
 
-Due to BUILD dependency issues with related MediaPipe projects, you must change the visibility permissions of the object_tracking_3d calculators. Navigate back to the parent directory containing both 'instant_motion_tracking' and 'mediapipe' to run the command below to copy the modified BUILD file to fix privacy issues between projects:
-
-```base
-cd ../
-
-mv instant_motion_tracking/installation/BUILD mediapipe/mediapipe/graphs/object_detection_3d/calculators/BUILD
-```
-
-Now, navigate to the MediaPipe directory and build the application via Bazel:
+Now the application can be built via Bazel:
 
 ```bash
-cd mediapipe
-
 bazel build -c opt --config=android_arm64 mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking
 ```
 
