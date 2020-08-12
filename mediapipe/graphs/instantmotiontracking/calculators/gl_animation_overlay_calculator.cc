@@ -93,7 +93,7 @@ static const int kNumMatrixEntries = 16;
 // animation frame for rendering.
 
 struct TriangleMesh {
-  int indexvertex_denom = 0;  // Needed for glDrawElements rendering call
+  int index_count = 0;  // Needed for glDrawElements rendering call
   std::unique_ptr<float[]> normals = nullptr;
   std::unique_ptr<float[]> vertices = nullptr;
   std::unique_ptr<float[]> texture_coords = nullptr;
@@ -132,7 +132,7 @@ class GlAnimationOverlayCalculator : public CalculatorBase {
   GLint model_matrix_uniform_ = -1;
 
   Timestamp animation_start_time_;
-  int framevertex_denom_ = 0;
+  int frame_count_ = 0;
   float animation_speed_fps_;
 
   std::vector<ModelMatrix> current_model_matrices_;
@@ -277,7 +277,7 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
   }
 
   // And now, while we are able to stream in more frames, we do so.
-  framevertex_denom_ = 0;
+  frame_count_ = 0;
   int32 lengths[3];
   while (ReadBytesFromAsset(asset, (void *)lengths, sizeof(lengths[0]) * 3)) {
     // About to start reading the next animation frame.  Stream it in here.
@@ -290,7 +290,7 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     triangle_mesh.vertices.reset(new float[lengths[0]]);
     if (!ReadBytesFromAsset(asset, (void *)triangle_mesh.vertices.get(),
                             sizeof(float) * lengths[0])) {
-      LOG(ERROR) << "Failed to read vertices for frame " << framevertex_denom_;
+      LOG(ERROR) << "Failed to read vertices for frame " << frame_count_;
       return false;
     }
 
@@ -298,15 +298,15 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     triangle_mesh.texture_coords.reset(new float[lengths[1]]);
     if (!ReadBytesFromAsset(asset, (void *)triangle_mesh.texture_coords.get(),
                             sizeof(float) * lengths[1])) {
-      LOG(ERROR) << "Failed to read tex-coords for frame " << framevertex_denom_;
+      LOG(ERROR) << "Failed to read tex-coords for frame " << frame_count_;
       return false;
     }
     // Try to read in indices (2-byte shorts)
-    triangle_mesh.indexvertex_denom = lengths[2];
+    triangle_mesh.index_count = lengths[2];
     triangle_mesh.triangle_indices.reset(new int16[lengths[2]]);
     if (!ReadBytesFromAsset(asset, (void *)triangle_mesh.triangle_indices.get(),
                             sizeof(int16) * lengths[2])) {
-      LOG(ERROR) << "Failed to read indices for frame " << framevertex_denom_;
+      LOG(ERROR) << "Failed to read indices for frame " << frame_count_;
       return false;
     }
 
@@ -352,7 +352,7 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       // triangles with a larger surface area from dominating the normal
       // calculations, however, none of our current models require this
       // normalization.
-      
+
       // Add connected normal to each associated vertex
       // It is also necessary to increment each vertex denominator for averaging
       for (int i = 0; i < 3; i++) {
@@ -381,11 +381,11 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       triangle_mesh.normals.get()[idx + 2] = normal_z / magnitude;
     }
 
-    framevertex_denom_++;
+    frame_count_++;
   }
   AAsset_close(asset);
 
-  LOG(INFO) << "Finished parsing " << framevertex_denom_ << " animation frames.";
+  LOG(INFO) << "Finished parsing " << frame_count_ << " animation frames.";
   if (meshes->empty()) {
     LOG(ERROR) << "No animation frames were parsed!  Erroring out calculator.";
     return false;
@@ -402,7 +402,7 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
     return false;
   }
 
-  framevertex_denom_ = 0;
+  frame_count_ = 0;
   int32 lengths[3];
   while (true) {
     // See if we have more initial size counts to read in.
@@ -421,7 +421,7 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
     infile.read((char *)(triangle_mesh.vertices.get()),
                 sizeof(float) * lengths[0]);
     if (!infile) {
-      LOG(ERROR) << "Failed to read vertices for frame " << framevertex_denom_;
+      LOG(ERROR) << "Failed to read vertices for frame " << frame_count_;
       return false;
     }
 
@@ -431,24 +431,24 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
                 sizeof(float) * lengths[1]);
     if (!infile) {
       LOG(ERROR) << "Failed to read texture coordinates for frame "
-                 << framevertex_denom_;
+                 << frame_count_;
       return false;
     }
 
     // Try to read in the triangle indices (2-byte shorts)
-    triangle_mesh.indexvertex_denom = lengths[2];
+    triangle_mesh.index_count = lengths[2];
     triangle_mesh.triangle_indices.reset(new int16[lengths[2]]);
     infile.read((char *)(triangle_mesh.triangle_indices.get()),
                 sizeof(int16) * lengths[2]);
     if (!infile) {
       LOG(ERROR) << "Failed to read triangle indices for frame "
-                 << framevertex_denom_;
+                 << frame_count_;
       return false;
     }
-    framevertex_denom_++;
+    frame_count_++;
   }
 
-  LOG(INFO) << "Finished parsing " << framevertex_denom_ << " animation frames.";
+  LOG(INFO) << "Finished parsing " << frame_count_ << " animation frames.";
   if (robot_triangle_meshes_.empty()) {
     LOG(ERROR) << "No animation frames were parsed!  Erroring out calculator.";
     return false;
@@ -536,7 +536,7 @@ int GlAnimationOverlayCalculator::GetAnimationFrameIndex(Timestamp timestamp) {
   double seconds_delta = timestamp.Seconds() - animation_start_time_.Seconds();
   int64_t frame_index =
       static_cast<int64_t>(seconds_delta * animation_speed_fps_);
-  frame_index %= framevertex_denom_;
+  frame_index %= frame_count_;
   return static_cast<int>(frame_index);
 }
 
@@ -841,7 +841,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
 ::mediapipe::Status GlAnimationOverlayCalculator::GlRender(
     const TriangleMesh &triangle_mesh, const float *model_matrix) {
   GLCHECK(glUniformMatrix4fv(model_matrix_uniform_, 1, GL_FALSE, model_matrix));
-  GLCHECK(glDrawElements(GL_TRIANGLES, triangle_mesh.indexvertex_denom,
+  GLCHECK(glDrawElements(GL_TRIANGLES, triangle_mesh.index_count,
                          GL_UNSIGNED_SHORT,
                          triangle_mesh.triangle_indices.get()));
   return ::mediapipe::OkStatus();
