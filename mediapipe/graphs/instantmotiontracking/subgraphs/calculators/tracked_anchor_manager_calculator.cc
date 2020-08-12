@@ -152,7 +152,8 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
           anchor.x = (box.left() + box.right()) * 0.5f;
           // Get center y normalized coordinate [0.0-1.0]
           anchor.y = (box.top() + box.bottom()) * 0.5f;
-          // Get center z coordinate [z starts at normalized 1.0 and scales inversely with box-width]
+          // Get center z coordinate [z starts at normalized 1.0 and scales 
+          // inversely with box-width]
           // TODO: Look into issues with uniform scaling on x-axis and y-axis
           anchor.z = kBoxEdgeSize / (box.right() - box.left());
           updated_from_tracker = true;
