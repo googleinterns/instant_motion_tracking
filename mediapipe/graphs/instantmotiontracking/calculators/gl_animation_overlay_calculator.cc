@@ -347,33 +347,29 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       float normal_x = Ay * Bz - Az * By;
       float normal_y = Az * Bx - Ax * Bz;
       float normal_z = Ax * By - Ay * Bx;
-      // Normalize the triangle surface normal
-      float product = 0.0f;
-      product = product + normal_x * normal_x;
-      product = product + normal_y * normal_y;
-      product = product + normal_z * normal_z;
-      float magnitude = sqrt(product);
-      normal_x /= magnitude;
-      normal_y /= magnitude;
-      normal_z /= magnitude;
 
       // Add connected normal to each associated vertex
       // It is also necessary to increment each vertex denominator for averaging
       vertex_normals_sum[v1 * 3] += normal_x;
       vertex_normals_sum[v1 * 3 + 1] += normal_y;
       vertex_normals_sum[v1 * 3 + 2] += normal_z;
+
       vertex_avg_denom[v1 * 3] += 1;
       vertex_avg_denom[v1 * 3 + 1] += 1;
       vertex_avg_denom[v1 * 3 + 2] += 1;
+
       vertex_normals_sum[v2 * 3] += normal_x;
       vertex_normals_sum[v2 * 3 + 1] += normal_y;
       vertex_normals_sum[v2 * 3 + 2] += normal_z;
+
       vertex_avg_denom[v2 * 3] += 1;
       vertex_avg_denom[v2 * 3 + 1] += 1;
       vertex_avg_denom[v2 * 3 + 2] += 1;
+
       vertex_normals_sum[v3 * 3] += normal_x;
       vertex_normals_sum[v3 * 3 + 1] += normal_y;
       vertex_normals_sum[v3 * 3 + 2] += normal_z;
+
       vertex_avg_denom[v3 * 3] += 1;
       vertex_avg_denom[v3 * 3 + 1] += 1;
       vertex_avg_denom[v3 * 3 + 2] += 1;
@@ -383,9 +379,12 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     // value of each adjacent triangle surface normal to every vertex and then
     // averaging the combined value.
     for (int idx = 0; idx < lengths[0]; idx+=3) {
-      triangle_mesh.normals.get()[idx] = vertex_normals_sum[idx] / vertex_avg_denom[idx];
-      triangle_mesh.normals.get()[idx + 1] = vertex_normals_sum[idx + 1] / vertex_avg_denom[idx + 1];
-      triangle_mesh.normals.get()[idx + 2] = vertex_normals_sum[idx + 2] / vertex_avg_denom[idx + 2];
+      float normal_x = vertex_normals_sum[idx] / vertex_avg_denom[idx];
+      float normal_y = vertex_normals_sum[idx + 1] / vertex_avg_denom[idx + 1];
+      float normal_z = vertex_normals_sum[idx + 2] / vertex_avg_denom[idx + 2];
+      triangle_mesh.normals.get()[idx] = normal_x;
+      triangle_mesh.normals.get()[idx + 1] = normal_y;
+      triangle_mesh.normals.get()[idx + 2] = normal_z;
     }
 
     frame_count_++;
@@ -746,10 +745,10 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     // generate ambient lighting of the scene on the object. Range is [0.0-1.0],
     // with the factor being proportional to the brightness of the lighting in the
     // scene being applied to the object
-    const float kAmbientLighting = 0.9;
+    const float kAmbientLighting = 0.75;
 
     // Define RGB values for light source
-    const vec3 kLightColor = vec3(1.0);
+    const vec3 kLightColor = vec3(0.25);
     // Exponent for directional lighting that governs diffusion of surface light
     const float kExponent = 1.0;
     // Define direction of lighting effect source
