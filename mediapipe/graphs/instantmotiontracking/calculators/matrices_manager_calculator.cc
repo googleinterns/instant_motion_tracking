@@ -35,7 +35,7 @@ namespace {
   using Matrix3f = Eigen::Matrix3f;
   using DiagonalMatrix3f = Eigen::DiagonalMatrix<float, 3>;
   constexpr char kAnchorsTag[] = "ANCHORS";
-  constexpr char kIMUMatrixTag[] = "IMU_ROTATIONS";
+  constexpr char kIMUMatrixTag[] = "IMU_ROTATION";
   constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
   constexpr char kUserScalingsTag[] = "USER_SCALINGS";
   constexpr char kRendersTag[] = "RENDER_DATA";
@@ -62,7 +62,7 @@ namespace {
 //  ANCHORS - Anchor data with x,y,z coordinates (x,y are in [0.0-1.0] range for
 //    position on the device screen, while z is the scaling factor that changes
 //    in proportion to the distance from the tracked region) [REQUIRED]
-//  IMU_ROTATIONS - float[9] of row-major device rotation matrix [REQUIRED]
+//  IMU_ROTATION - float[9] of row-major device rotation matrix [REQUIRED]
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
 // Output:
@@ -185,6 +185,8 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
           .Tag(kAnchorsTag)
           .Get<std::vector<Anchor>>();
 
+  const auto imu_matrix = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>();
+
   // Device IMU rotation submatrix
   Matrix3f imu_rotation_submatrix;
   int idx = 0;
@@ -192,7 +194,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     for (int y = 0; y < 3; y++) {
       // Input matrix is row-major matrix, it must be reformatted to column-major
       // via transpose procedure
-      imu_rotation_submatrix(y, x) = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>()[idx++];
+      imu_rotation_submatrix(y, x) = imu_matrix[idx++];
     }
   }
 

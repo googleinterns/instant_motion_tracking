@@ -1,4 +1,4 @@
-// Copyright 2020 The MediaPipe Authors.
+// Copyright 2020 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -311,24 +311,26 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     }
 
     // Set triangle_mesh normals for shader usage
-    int len = lengths[2];
-    triangle_mesh.normals.reset(new float[len]);
-    float triangle_normals[len];
+    triangle_mesh.normals.reset(new float[lengths[0]]);
+
+    // Used for storing the vertex normals prior to averaging
+    float vertex_normals_sum[lengths[0]];
+    float vertex_avg_denom[lengths[0]];
 
     // Compute every triangle surface normal and store them for later use.
-    for (int idx = 0; idx < len; idx += 3) {
+    for (int idx = 0; idx < lengths[2]; idx += 3) {
       int v1 = triangle_mesh.triangle_indices.get()[idx];
       int v2 = triangle_mesh.triangle_indices.get()[idx + 1];
       int v3 = triangle_mesh.triangle_indices.get()[idx + 2];
-      // Previous (V1) vertex X,Y,Z indices in triangle_mesh.vertices
+      // (V1) vertex X,Y,Z indices in triangle_mesh.vertices
       float V1x = triangle_mesh.vertices[v1 * 3];
       float V1y = triangle_mesh.vertices[v1 * 3 + 1];
       float V1z = triangle_mesh.vertices[v1 * 3 + 2];
-      // Current (V2) vertex X,Y,Z indices in triangle_mesh.vertices
+      // (V2) vertex X,Y,Z indices in triangle_mesh.vertices
       float V2x = triangle_mesh.vertices[v2 * 3];
       float V2y = triangle_mesh.vertices[v2 * 3 + 1];
       float V2z = triangle_mesh.vertices[v2 * 3 + 2];
-      // Next (V3) vertex X,Y,Z indices in triangle_mesh.vertices
+      // (V3) vertex X,Y,Z indices in triangle_mesh.vertices
       float V3x = triangle_mesh.vertices[v3 * 3];
       float V3y = triangle_mesh.vertices[v3 * 3 + 1];
       float V3z = triangle_mesh.vertices[v3 * 3 + 2];
@@ -342,32 +344,48 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       float By = V3y - V1y;
       float Bz = V3z - V1z;
       // Calculate cross product
-      triangle_normals[idx] = Ay * Bz - Az * By;
-      triangle_normals[idx + 1] = Az * Bx - Ax * Bz;
-      triangle_normals[idx + 2] = Ax * By - Ay * Bx;
-    }
-
-    // Normalize each triangle surface normal
-    for(int i = 0; i < len; i+=3) {
-      float product = 0.0;
-      product = product + triangle_normals[i] * triangle_normals[i];
-      product = product + triangle_normals[i+1] * triangle_normals[i+1];
-      product = product + triangle_normals[i+2] * triangle_normals[i+2];
+      float normal_x = Ay * Bz - Az * By;
+      float normal_y = Az * Bx - Ax * Bz;
+      float normal_z = Ax * By - Ay * Bx;
+      // Normalize the triangle surface normal
+      float product = 0.0f;
+      product = product + normal_x * normal_x;
+      product = product + normal_y * normal_y;
+      product = product + normal_z * normal_z;
       float magnitude = sqrt(product);
-      triangle_normals[i] /= magnitude;
-      triangle_normals[i+1] /= magnitude;
-      triangle_normals[i+2] /= magnitude;
+      normal_x /= magnitude;
+      normal_y /= magnitude;
+      normal_z /= magnitude;
+
+      // Add connected normal to each associated vertex
+      // It is also necessary to increment each vertex denominator for averaging
+      vertex_normals_sum[v1 * 3] += normal_x;
+      vertex_normals_sum[v1 * 3 + 1] += normal_y;
+      vertex_normals_sum[v1 * 3 + 2] += normal_z;
+      vertex_avg_denom[v1 * 3] += 1;
+      vertex_avg_denom[v1 * 3 + 1] += 1;
+      vertex_avg_denom[v1 * 3 + 2] += 1;
+      vertex_normals_sum[v2 * 3] += normal_x;
+      vertex_normals_sum[v2 * 3 + 1] += normal_y;
+      vertex_normals_sum[v2 * 3 + 2] += normal_z;
+      vertex_avg_denom[v2 * 3] += 1;
+      vertex_avg_denom[v2 * 3 + 1] += 1;
+      vertex_avg_denom[v2 * 3 + 2] += 1;
+      vertex_normals_sum[v3 * 3] += normal_x;
+      vertex_normals_sum[v3 * 3 + 1] += normal_y;
+      vertex_normals_sum[v3 * 3 + 2] += normal_z;
+      vertex_avg_denom[v3 * 3] += 1;
+      vertex_avg_denom[v3 * 3 + 1] += 1;
+      vertex_avg_denom[v3 * 3 + 2] += 1;
     }
 
     // Combine all triangle normals connected to each vertex by adding the X,Y,Z
     // value of each adjacent triangle surface normal to every vertex and then
     // averaging the combined value.
-    for (int idx = 0; idx < len; idx+=3) {
-      float denom = 3.0;
-      // Set triangle_mesh normals
-      triangle_mesh.normals.get()[idx] = (triangle_normals[idx] + triangle_normals[(idx + 3) % (len)] + triangle_normals[(idx + 6) % (len)])/denom;
-      triangle_mesh.normals.get()[idx + 1] = (triangle_normals[idx + 1] + triangle_normals[(idx + 4) % (len)] + triangle_normals[(idx + 7) % (len)])/denom;
-      triangle_mesh.normals.get()[idx + 2] = (triangle_normals[idx + 2] + triangle_normals[(idx + 5) % (len)] + triangle_normals[(idx + 8) % (len)])/denom;
+    for (int idx = 0; idx < lengths[0]; idx+=3) {
+      triangle_mesh.normals.get()[idx] = vertex_normals_sum[idx] / vertex_avg_denom[idx];
+      triangle_mesh.normals.get()[idx + 1] = vertex_normals_sum[idx + 1] / vertex_avg_denom[idx + 1];
+      triangle_mesh.normals.get()[idx + 2] = vertex_normals_sum[idx + 2] / vertex_avg_denom[idx + 2];
     }
 
     frame_count_++;
@@ -731,7 +749,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     const float kAmbientLighting = 0.9;
 
     // Define RGB values for light source
-    const vec3 kLightColor = vec3(0.3);
+    const vec3 kLightColor = vec3(1.0);
     // Exponent for directional lighting that governs diffusion of surface light
     const float kExponent = 1.0;
     // Define direction of lighting effect source
@@ -739,7 +757,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     // Hard-coded view direction
     const vec3 viewDir = vec3(0.0, 0.0, -1.0);
 
-    // DirectionalLighting procedure from imported from Lullaby @ https://github.com/google/lullaby
+    // DirectionalLighting procedure imported from Lullaby @ https://github.com/google/lullaby
     // Calculate and return the color (diffuse and specular together) reflected by
     // a directional light.
     vec3 GetDirectionalLight(vec3 pos, vec3 normal, vec3 viewDir, vec3 lightDir, vec3 lightColor, float exponent) {
