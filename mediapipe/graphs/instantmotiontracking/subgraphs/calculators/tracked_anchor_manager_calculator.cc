@@ -108,7 +108,8 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
   std::vector<Anchor> tracked_scaled_anchor_data;
 
   // Delete any boxes being tracked without an associated anchor
-  for (const TimedBoxProto& box : cc->Inputs().Tag(kBoxesInputTag).Get<TimedBoxProtoList>().box()) {
+  for (const TimedBoxProto& box : cc->Inputs().Tag(kBoxesInputTag)
+       .Get<TimedBoxProtoList>().box()) {
     bool anchor_exists = false;
     for (Anchor anchor : current_anchor_data) {
       if (box.id() == anchor.sticker_id) {
