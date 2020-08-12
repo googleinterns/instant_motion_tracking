@@ -353,7 +353,6 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       vertex_normals_sum[v1 * 3] += normal_x;
       vertex_normals_sum[v1 * 3 + 1] += normal_y;
       vertex_normals_sum[v1 * 3 + 2] += normal_z;
-
       vertex_avg_denom[v1 * 3] += 1;
       vertex_avg_denom[v1 * 3 + 1] += 1;
       vertex_avg_denom[v1 * 3 + 2] += 1;
@@ -361,7 +360,6 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       vertex_normals_sum[v2 * 3] += normal_x;
       vertex_normals_sum[v2 * 3 + 1] += normal_y;
       vertex_normals_sum[v2 * 3 + 2] += normal_z;
-
       vertex_avg_denom[v2 * 3] += 1;
       vertex_avg_denom[v2 * 3 + 1] += 1;
       vertex_avg_denom[v2 * 3 + 2] += 1;
@@ -369,7 +367,6 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       vertex_normals_sum[v3 * 3] += normal_x;
       vertex_normals_sum[v3 * 3 + 1] += normal_y;
       vertex_normals_sum[v3 * 3 + 2] += normal_z;
-
       vertex_avg_denom[v3 * 3] += 1;
       vertex_avg_denom[v3 * 3 + 1] += 1;
       vertex_avg_denom[v3 * 3 + 2] += 1;
@@ -382,9 +379,13 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       float normal_x = vertex_normals_sum[idx] / vertex_avg_denom[idx];
       float normal_y = vertex_normals_sum[idx + 1] / vertex_avg_denom[idx + 1];
       float normal_z = vertex_normals_sum[idx + 2] / vertex_avg_denom[idx + 2];
-      triangle_mesh.normals.get()[idx] = normal_x;
-      triangle_mesh.normals.get()[idx + 1] = normal_y;
-      triangle_mesh.normals.get()[idx + 2] = normal_z;
+      // Normalize the averaged normal and set triangle_mesh normals
+      float product = normal_x * normal_x + normal_y * normal_y +
+        normal_z * normal_z;
+      float magnitude = sqrt(product);
+      triangle_mesh.normals.get()[idx] = normal_x / magnitude;
+      triangle_mesh.normals.get()[idx + 1] = normal_y / magnitude;
+      triangle_mesh.normals.get()[idx + 2] = normal_z / magnitude;
     }
 
     frame_count_++;
@@ -788,7 +789,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       if (pixel.a < 0.2) discard;
 
       // Convert pixel to 3D for lighting procedure
-      vec3 pixelPos = vec3(sampleCoordinate, 1.0);
+      vec3 pixelPos = vec3(gl_FragCoord);
       // Generate directional lighting effect
       vec3 lighting = GetDirectionalLight(pixelPos, vNormal, viewDir, lightDir, kLightColor, kExponent);
       // Apply both ambient and directional lighting to our texture
