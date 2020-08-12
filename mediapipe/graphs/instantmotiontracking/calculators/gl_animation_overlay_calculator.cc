@@ -372,7 +372,7 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     // Combine all triangle normals connected to each vertex by adding the X,Y,Z
     // value of each adjacent triangle surface normal to every vertex and then
     // averaging the combined value.
-    for (int idx = 0; idx < lengths[0]; idx+=3) {
+    for (int idx = 0; idx < lengths[0]; idx += 3) {
       float normal_x = vertex_normals_sum[idx] / vertex_avg_denom[idx];
       float normal_y = vertex_normals_sum[idx + 1] / vertex_avg_denom[idx + 1];
       float normal_z = vertex_normals_sum[idx + 2] / vertex_avg_denom[idx + 2];
