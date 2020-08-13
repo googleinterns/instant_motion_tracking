@@ -76,8 +76,9 @@ adb install bazel-bin/mediapipe/examples/android/src/java/com/google/mediapipe/a
 ```
 
 ## Graph
+
 The instant motion tracking [main graph](#main-graph) internally utilizes a [region tracking subgraph](#region-tracking-subgraph)
-in order to perform anchor tracking for each individual 3d render (creating the AR effect).
+in order to perform anchor tracking for each individual 3d render.
 
 ### Main Graph
 
