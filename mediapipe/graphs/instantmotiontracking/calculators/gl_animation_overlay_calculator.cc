@@ -755,13 +755,13 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
     // a directional light.
     vec3 GetDirectionalLight(vec3 pos, vec3 normal, vec3 viewDir, vec3 lightDir, vec3 lightColor, float exponent) {
       // Intensity of the diffuse light. Saturate to keep within the 0-1 range.
-      float normal_dot_light_dir = dot(normal, -lightDir);
+      float normal_dot_light_dir = dot(-normal, -lightDir);
       float intensity = clamp(normal_dot_light_dir, 0.0, 1.0);
       // Calculate the diffuse light
       vec3 diffuse = intensity * lightColor;
       // http://www.rorydriscoll.com/2009/01/25/energy-conservation-in-games/
       float kEnergyConservation = (2.0 + exponent) / (2.0 * kPi);
-      vec3 reflect_dir = reflect(lightDir, normal);
+      vec3 reflect_dir = reflect(lightDir, -normal);
       // Intensity of the specular light
       float view_dot_reflect = dot(-viewDir, reflect_dir);
       // Use an epsilon for pow because pow(x,y) is undefined if x < 0 or x == 0
@@ -782,7 +782,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       if (pixel.a < 0.2) discard;
 
       // Generate directional lighting effect
-      vec3 lighting = GetDirectionalLight(gl_FragCoord.xyz, -vNormal, viewDir, lightDir, kLightColor, kExponent);
+      vec3 lighting = GetDirectionalLight(gl_FragCoord.xyz, vNormal, viewDir, lightDir, kLightColor, kExponent);
       // Apply both ambient and directional lighting to our texture
       gl_FragColor = vec4((vec3(kAmbientLighting) + lighting) * pixel.rgb, 1.0);
     }
