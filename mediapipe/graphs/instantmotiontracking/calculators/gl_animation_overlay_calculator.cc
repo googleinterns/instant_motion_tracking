@@ -782,7 +782,7 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       if (pixel.a < 0.2) discard;
 
       // Generate directional lighting effect
-      vec3 lighting = GetDirectionalLight(gl_FragCoord.xyz, vNormal, viewDir, lightDir, kLightColor, kExponent);
+      vec3 lighting = GetDirectionalLight(gl_FragCoord.xyz, -vNormal, viewDir, lightDir, kLightColor, kExponent);
       // Apply both ambient and directional lighting to our texture
       gl_FragColor = vec4((vec3(kAmbientLighting) + lighting) * pixel.rgb, 1.0);
     }
