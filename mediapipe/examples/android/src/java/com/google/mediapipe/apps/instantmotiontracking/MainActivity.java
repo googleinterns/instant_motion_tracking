@@ -76,6 +76,11 @@ import com.bumptech.glide.load.resource.gif.GifDrawable;
 import com.bumptech.glide.request.target.SimpleTarget;
 import com.bumptech.glide.request.transition.Transition;
 
+/**
+* This is the MainActivity that handles camera input, IMU sensor data acquisition
+* and sticker placement for the InstantMotionTracking MediaPipe project.
+**/
+
 public class MainActivity extends AppCompatActivity {
   private static final String TAG = "MainActivity";
   private static final boolean FLIP_FRAMES_VERTICALLY = true;
@@ -251,14 +256,15 @@ public class MainActivity extends AppCompatActivity {
     constraintLayout.setOnTouchListener(
       new ConstraintLayout.OnTouchListener() {
         public boolean onTouch(View v, MotionEvent event) {
-          return UITouchManager(event);
+          return manageUiTouch(event);
         }
       });
-    refreshUI();
+    refreshUi();
   }
 
-  // Use MotionEvent properties to interpret taps/rotations/scales
-  private boolean UITouchManager(MotionEvent event) {
+  // Manages a touch event in order to perform placement/rotation/scaling gestures
+  // on virtual sticker objects.
+  private boolean manageUiTouch(MotionEvent event) {
     if(currentSticker != null) {
       switch (event.getAction()) {
         // Detecting a single click for object re-anchoring
@@ -286,8 +292,9 @@ public class MainActivity extends AppCompatActivity {
     return true;
   }
 
-  // If our fingers are moved in a rotation, then our rotation factor will change
-  // by the sum of the rotation of both fingers in radians
+
+  // Returns a float value that is equal to the radians of rotation from a two-finger
+  // MotionEvent recorded by the OnTouchListener.
   private float calculateRotationRadians(MotionEvent event) {
     float tangentA =
             (float)
@@ -304,68 +311,72 @@ public class MainActivity extends AppCompatActivity {
     return rotationIncrement;
   }
 
-  // If our finger-to-finger distance increased, so will our scaling.
+  // Returns a float value that is equal to the translation distance between
+  // two-fingers that move in a pinch/spreading direction.
   private float getNewScaleFactor(MotionEvent event, float currentScaleFactor) {
-    double new_distance =
-            distance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
-    double old_distance =
-            distance(
+    double newDistance =
+            getDistance(event.getX(0), event.getY(0), event.getX(1), event.getY(1));
+    double oldDistance =
+            getDistance(
                     event.getHistoricalX(0, 0),
                     event.getHistoricalY(0, 0),
                     event.getHistoricalX(1, 0),
                     event.getHistoricalY(1, 0));
-    float sign_float =
-            (new_distance < old_distance)
+    float signFloat =
+            (newDistance < oldDistance)
                     ? -SCALING_FACTOR
                     : SCALING_FACTOR; // Are they moving towards each other?
-    currentScaleFactor *= (1f + sign_float);
+    currentScaleFactor *= (1f + signFloat);
     return currentScaleFactor;
   }
 
+  // Called if a single touch event is recorded on the screen and used to set the
+  // new anchor position for the current sticker in focus.
   private void recordClick(MotionEvent event) {
     float x = (event.getX() / constraintLayout.getWidth());
     float y = (event.getY() / constraintLayout.getHeight());
-    currentSticker.setNewAnchor(x, y);
-    // Setting the stickerSentinel will reposition the sticker in the MediaPipe
-    // graph
-    stickerSentinel = currentSticker.getStickerID();
+    currentSticker.setAnchorCoordinate(x, y);
+    stickerSentinel = currentSticker.getstickerId();
   }
 
-  private double distance(double x1, double y1, double x2, double y2) {
+  // Provided the X and Y coordinates of two points, the distance between them
+  // will be returned.
+  private double getDistance(double x1, double y1, double x2, double y2) {
     return Math.sqrt((y2 - y1) * (y2 - y1) + (x2 - x1) * (x2 - x1));
   }
 
-  // Called whenever a button is clicked
-  private void refreshUI() {
+  // Called upon each button click, and used to populate the buttonLayout with the
+  // current sticker data in addition to sticker controls (delete, remove, back).
+  private void refreshUi() {
     if(currentSticker != null) { // No sticker in view
         buttonLayout.removeAllViews();
         ImageButton deleteSticker = new ImageButton(this);
-        setUIControlButtonDesign(deleteSticker, R.drawable.baseline_clear_24);
+        setControlButtonDesign(deleteSticker, R.drawable.baseline_clear_24);
         deleteSticker.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 if(currentSticker != null) {
                     stickerArrayList.remove(currentSticker);
                     currentSticker = null;
-                    refreshUI();
+                    refreshUi();
                 }
             }
         });
         // Go to home sticker menu
         ImageButton goBack = new ImageButton(this);
-        setUIControlButtonDesign(goBack, R.drawable.baseline_arrow_back_24);
+        setControlButtonDesign(goBack, R.drawable.baseline_arrow_back_24);
         goBack.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 currentSticker = null;
-                refreshUI();
+                refreshUi();
             }
         });
         // Change sticker to next possible render
         ImageButton loopRender = new ImageButton(this);
-        setUIControlButtonDesign(loopRender, R.drawable.baseline_loop_24);
+        setControlButtonDesign(loopRender, R.drawable.baseline_loop_24);
         loopRender.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 currentSticker.setRender(currentSticker.getRender().iterate());
-                refreshUI();
+                refreshUi();
             }
         });
         buttonLayout.addView(deleteSticker);
@@ -375,7 +386,7 @@ public class MainActivity extends AppCompatActivity {
         // Add the GIF search option if current sticker is GIF
         if(currentSticker.getRender() == Sticker.Render.GIF) {
           ImageButton gifSearch = new ImageButton(this);
-          setUIControlButtonDesign(gifSearch, R.drawable.baseline_search_24);
+          setControlButtonDesign(gifSearch, R.drawable.baseline_search_24);
           gifSearch.setOnClickListener(new View.OnClickListener() {
               public void onClick(View v) {
                 // Clear the text field to prevent text artifacts in GIF selection
@@ -395,7 +406,7 @@ public class MainActivity extends AppCompatActivity {
             stickerButton.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
                     currentSticker = sticker;
-                    refreshUI();
+                    refreshUi();
                 }
             });
             if(sticker.getRender() == Sticker.Render.ROBOT) {
@@ -405,25 +416,25 @@ public class MainActivity extends AppCompatActivity {
               setStickerButtonDesign(stickerButton, R.drawable.dino);
             }
             else if(sticker.getRender() == Sticker.Render.GIF) {
-              setUIControlButtonDesign(stickerButton, R.drawable.baseline_gif_24);
+              setControlButtonDesign(stickerButton, R.drawable.baseline_gif_24);
             }
 
             buttonLayout.addView(stickerButton);
         }
         ImageButton addSticker = new ImageButton(this);
-        setUIControlButtonDesign(addSticker, R.drawable.baseline_add_24);
+        setControlButtonDesign(addSticker, R.drawable.baseline_add_24);
         addSticker.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 stickerArrayList.add(new Sticker());
-                refreshUI();
+                refreshUi();
             }
         });
         ImageButton clearStickers = new ImageButton(this);
-        setUIControlButtonDesign(clearStickers, R.drawable.baseline_clear_all_24);
+        setControlButtonDesign(clearStickers, R.drawable.baseline_clear_all_24);
         clearStickers.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 stickerArrayList.clear();
-                refreshUI();
+                refreshUi();
             }
         });
 
@@ -432,8 +443,8 @@ public class MainActivity extends AppCompatActivity {
     }
   }
 
-  // Sets ImageButton UI for Control Buttons (Delete, Add, Back)
-  private void setUIControlButtonDesign(ImageButton btn, int imageDrawable) {
+  // Sets ImageButton UI for Control Buttons.
+  private void setControlButtonDesign(ImageButton btn, int imageDrawable) {
       btn.setImageDrawable(getResources().getDrawable(imageDrawable));
       btn.setBackgroundColor(Color.parseColor("#00ffffff"));
       btn.setLayoutParams(new LinearLayout.LayoutParams(200, 200));
@@ -441,7 +452,7 @@ public class MainActivity extends AppCompatActivity {
       btn.setScaleType(ImageView.ScaleType.FIT_XY);
   }
 
-  // Sets ImageButton UI for Sticker Buttons
+  // Sets ImageButton UI for Sticker Buttons.
   private void setStickerButtonDesign(ImageButton btn, int imageDrawable) {
       btn.setImageDrawable(getResources().getDrawable(imageDrawable));
       btn.setBackground(getResources().getDrawable(R.drawable.circle_button));
@@ -450,6 +461,7 @@ public class MainActivity extends AppCompatActivity {
       btn.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
   }
 
+  // Used to set ArrayList of Bitmap frames
   private void setGIFBitmaps(String gif_url) {
     GIFBitmaps = new ArrayList<Bitmap>(); // Empty the bitmap array
     Glide.with(this).asGif().load(gif_url).into(new SimpleTarget<GifDrawable>() {

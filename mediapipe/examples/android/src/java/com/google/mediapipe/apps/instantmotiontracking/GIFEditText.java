@@ -28,6 +28,13 @@ import androidx.core.view.inputmethod.EditorInfoCompat;
 import androidx.core.view.inputmethod.InputConnectionCompat;
 import androidx.core.view.inputmethod.InputContentInfoCompat;
 
+/**
+* This custom EditText implementation uses the existing EditText framework in
+* order to develop a GIFEditText input box which is capable of accepting GIF
+* animations from the Android system keyboard and return the GIF location with
+* a content URI.
+**/
+
 public class GIFEditText extends AppCompatEditText {
 
     private GIFCommitListener gifCommitListener;
@@ -36,14 +43,19 @@ public class GIFEditText extends AppCompatEditText {
         super(context);
     }
 
-    public GIFEditText(Context context, AttributeSet attrs) {
-        super(context, attrs);
-    }
-
+    /**
+    * GIFCommitListener is called once content is pushed to the EditText via the
+    * Android keyboard.
+    **/
     public interface GIFCommitListener {
         void GIFCommitListener(Uri contentUri, ClipDescription description);
     }
 
+    /**
+    * Used to set the gifCommitListener for this GIFEditText.
+    *
+    * @param gifCommitListener handles response to new content pushed to EditText
+    **/
     public void setGIFCommitListener(GIFCommitListener gifCommitListener) {
         this.gifCommitListener = gifCommitListener;
     }
