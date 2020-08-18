@@ -66,8 +66,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * This is the MainActivity that handles camera input, IMU sensor data acquisition and sticker
- * placement for the InstantMotionTracking MediaPipe project.
+ * This is the MainActivity that handles camera input, IMU sensor data acquisition
+ * and sticker placement for the InstantMotionTracking MediaPipe project.
  */
 public class MainActivity extends AppCompatActivity {
   private static final String TAG = "MainActivity";
@@ -129,16 +129,16 @@ public class MainActivity extends AppCompatActivity {
   // TODO: Grouping all tags and assets into a seperate structure
   // TODO: bitmaps are space heavy, try to use compressed like png/webp
   private Bitmap robotTexture = null;
-  private final String ROBOT_TEXTURE = "robot_texture.bmp";
-  private final String ROBOT_FILE = "robot.obj.uuu";
-  private final String ROBOT_TEXTURE_TAG = "robot_texture";
-  private final String ROBOT_ASSET_TAG = "robot_asset_name";
+  private final String ROBOT_TEXTURE = "asset1_texture.bmp";
+  private final String ROBOT_FILE = "asset1.obj.uuu";
+  private final String ROBOT_TEXTURE_TAG = "asset1_texture";
+  private final String ROBOT_ASSET_TAG = "asset1_name";
   // All dino animation assets and tags
   private Bitmap dinoTexture = null;
-  private final String DINO_TEXTURE = "dino_texture.bmp";
-  private final String DINO_FILE = "dino.obj.uuu";
-  private final String DINO_TEXTURE_TAG = "dino_texture";
-  private final String DINO_ASSET_TAG = "dino_asset_name";
+  private final String DINO_TEXTURE = "asset2_texture.bmp";
+  private final String DINO_FILE = "asset2.obj.uuu";
+  private final String DINO_TEXTURE_TAG = "asset2_texture";
+  private final String DINO_ASSET_TAG = "asset2_name";
   // All GIF animation assets and tags
   private GIFEditText editText;
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();

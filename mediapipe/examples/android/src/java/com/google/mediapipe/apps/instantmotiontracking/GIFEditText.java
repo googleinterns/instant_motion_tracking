@@ -18,6 +18,7 @@ import android.content.ClipDescription;
 import android.content.Context;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.AttributeSet;
 import android.util.Log;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -38,6 +39,10 @@ public class GIFEditText extends AppCompatEditText {
 
   public GIFEditText(Context context) {
     super(context);
+  }
+
+  public GIFEditText(Context context, AttributeSet attrs) {
+    super(context, attrs);
   }
 
   /**
