@@ -158,6 +158,18 @@ class GlAnimationOverlayCalculator : public CalculatorBase {
   // first image packet read.
   float perspective_matrix_[kNumMatrixEntries];
 
+  // Used to normalize a 3-element float array (vertex normal)
+  void Normalize3f(float input[3]) {
+    float product = 0.0;
+    product += input[0] * input[0];
+    product += input[1] * input[1];
+    product += input[2] * input[2];
+    float magnitude = sqrt(product);
+    input[0] /= magnitude;
+    input[1] /= magnitude;
+    input[2] /= magnitude;
+  }
+
   void ComputeAspectRatioAndFovFromCameraParameters(
       const CameraParametersProto &camera_parameters, float *aspect_ratio,
       float *vertical_fov_degrees);
@@ -391,16 +403,14 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     // value of each adjacent triangle surface normal to every vertex and then
     // averaging the combined value.
     for (int idx = 0; idx < lengths[0]; idx += 3) {
-      float normal_x = vertex_normals_sum[idx] / vertex_denom[idx];
-      float normal_y = vertex_normals_sum[idx + 1] / vertex_denom[idx + 1];
-      float normal_z = vertex_normals_sum[idx + 2] / vertex_denom[idx + 2];
-      // Normalize the averaged normal and set triangle_mesh normals
-      float product = normal_x * normal_x + normal_y * normal_y +
-        normal_z * normal_z;
-      float magnitude = sqrt(product);
-      triangle_mesh.normals.get()[idx] = normal_x / magnitude;
-      triangle_mesh.normals.get()[idx + 1] = normal_y / magnitude;
-      triangle_mesh.normals.get()[idx + 2] = normal_z / magnitude;
+      float normal[3];
+      normal[0] = vertex_normals_sum[idx] / vertex_denom[idx];
+      normal[1] = vertex_normals_sum[idx + 1] / vertex_denom[idx + 1];
+      normal[2] = vertex_normals_sum[idx + 2] / vertex_denom[idx + 2];
+      Normalize3f(normal);
+      triangle_mesh.normals.get()[idx] = normal[0];
+      triangle_mesh.normals.get()[idx + 1] = normal[1];
+      triangle_mesh.normals.get()[idx + 2] = normal[2];
     }
 
     frame_count_++;
@@ -527,16 +537,14 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
     // value of each adjacent triangle surface normal to every vertex and then
     // averaging the combined value.
     for (int idx = 0; idx < lengths[0]; idx += 3) {
-      float normal_x = vertex_normals_sum[idx] / vertex_denom[idx];
-      float normal_y = vertex_normals_sum[idx + 1] / vertex_denom[idx + 1];
-      float normal_z = vertex_normals_sum[idx + 2] / vertex_denom[idx + 2];
-      // Normalize the averaged normal and set triangle_mesh normals
-      float product = normal_x * normal_x + normal_y * normal_y +
-        normal_z * normal_z;
-      float magnitude = sqrt(product);
-      triangle_mesh.normals.get()[idx] = normal_x / magnitude;
-      triangle_mesh.normals.get()[idx + 1] = normal_y / magnitude;
-      triangle_mesh.normals.get()[idx + 2] = normal_z / magnitude;
+      float normal[3];
+      normal[0] = vertex_normals_sum[idx] / vertex_denom[idx];
+      normal[1] = vertex_normals_sum[idx + 1] / vertex_denom[idx + 1];
+      normal[2] = vertex_normals_sum[idx + 2] / vertex_denom[idx + 2];
+      Normalize3f(normal);
+      triangle_mesh.normals.get()[idx] = normal[0];
+      triangle_mesh.normals.get()[idx + 1] = normal[1];
+      triangle_mesh.normals.get()[idx + 2] = normal[2];
     }
 
     frame_count_++;
