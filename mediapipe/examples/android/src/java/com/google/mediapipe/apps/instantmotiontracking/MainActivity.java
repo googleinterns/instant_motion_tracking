@@ -67,7 +67,7 @@ import java.util.Map;
 
 /**
  * This is the MainActivity that handles camera input, IMU sensor data acquisition
- * and sticker placement for the InstantMotionTracking MediaPipe project.
+ * and sticker management for the InstantMotionTracking MediaPipe project.
  */
 public class MainActivity extends AppCompatActivity {
   private static final String TAG = "MainActivity";
@@ -125,20 +125,20 @@ public class MainActivity extends AppCompatActivity {
 
   private final String STICKER_PROTO_TAG = "sticker_proto_string";
   // Assets for object rendering
-  // All robot animation assets and tags
+  // All animation assets and tags for the first asset (1)
   // TODO: Grouping all tags and assets into a seperate structure
   // TODO: bitmaps are space heavy, try to use compressed like png/webp
-  private Bitmap robotTexture = null;
-  private final String ROBOT_TEXTURE = "asset1_texture.bmp";
-  private final String ROBOT_FILE = "asset1.obj.uuu";
-  private final String ROBOT_TEXTURE_TAG = "asset1_texture";
-  private final String ROBOT_ASSET_TAG = "asset1_name";
-  // All dino animation assets and tags
-  private Bitmap dinoTexture = null;
-  private final String DINO_TEXTURE = "asset2_texture.bmp";
-  private final String DINO_FILE = "asset2.obj.uuu";
-  private final String DINO_TEXTURE_TAG = "asset2_texture";
-  private final String DINO_ASSET_TAG = "asset2_name";
+  private Bitmap assetTexture1 = null;
+  private final String TEXTURE_FILE_1 = "texture_1.bmp";
+  private final String ASSET_FILE_1 = "asset_1.obj.uuu";
+  private final String TEXTURE_TAG_1 = "texture_1";
+  private final String ASSET_TAG_1 = "asset_1";
+  // All animation assets and tags for the second asset (2)
+  private Bitmap assetTexture2 = null;
+  private final String TEXTURE_FILE_2 = "texture_2.bmp";
+  private final String ASSET_FILE_2 = "asset_2.obj.uuu";
+  private final String TEXTURE_TAG_2 = "texture_2";
+  private final String ASSET_TAG_2 = "asset_2";
   // All GIF animation assets and tags
   private GIFEditText editText;
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
@@ -207,14 +207,14 @@ public class MainActivity extends AppCompatActivity {
 
     // TODO: Should come from querying the video frame
     Map<String, Packet> inputSidePackets = new HashMap<>();
-    inputSidePackets.put(ROBOT_TEXTURE_TAG,
-      packetCreator.createRgbaImageFrame(robotTexture));
-    inputSidePackets.put(ROBOT_ASSET_TAG,
-      packetCreator.createString(ROBOT_FILE));
-    inputSidePackets.put(DINO_TEXTURE_TAG,
-      packetCreator.createRgbaImageFrame(dinoTexture));
-    inputSidePackets.put(DINO_ASSET_TAG,
-      packetCreator.createString(DINO_FILE));
+    inputSidePackets.put(TEXTURE_TAG_1,
+      packetCreator.createRgbaImageFrame(assetTexture1));
+    inputSidePackets.put(ASSET_TAG_1,
+      packetCreator.createString(ASSET_FILE_1));
+    inputSidePackets.put(TEXTURE_TAG_2,
+      packetCreator.createRgbaImageFrame(assetTexture2));
+    inputSidePackets.put(ASSET_TAG_2,
+      packetCreator.createString(ASSET_FILE_2));
     inputSidePackets.put(GIF_ASSET_TAG,
       packetCreator.createString(GIF_FILE));
     processor.setInputSidePackets(inputSidePackets);
@@ -420,12 +420,12 @@ public class MainActivity extends AppCompatActivity {
                 refreshUi();
               }
             });
-        if (sticker.getRender() == Sticker.Render.ROBOT) {
-          setStickerButtonDesign(stickerButton, R.drawable.robot);
-        } else if (sticker.getRender() == Sticker.Render.DINO) {
-          setStickerButtonDesign(stickerButton, R.drawable.dino);
+        if (sticker.getRender() == Sticker.Render.ASSET_1) {
+          setStickerButtonDesign(stickerButton, R.drawable.asset_preview_1);
+        } else if (sticker.getRender() == Sticker.Render.ASSET_2) {
+          setStickerButtonDesign(stickerButton, R.drawable.asset_preview_2);
         } else if (sticker.getRender() == Sticker.Render.GIF) {
-          setControlButtonDesign(stickerButton, R.drawable.baseline_gif_24);
+          setControlButtonDesign(stickerButton, R.drawable.asset_preview_gif);
         }
 
         buttonLayout.addView(stickerButton);
@@ -628,8 +628,8 @@ public class MainActivity extends AppCompatActivity {
     decodeOptions.inPremultiplied = false;
 
     try {
-      InputStream inputStream = getAssets().open(ROBOT_TEXTURE);
-      robotTexture = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
+      InputStream inputStream = getAssets().open(TEXTURE_FILE_1);
+      assetTexture1 = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
       inputStream.close();
     } catch (Exception e) {
       Log.e(TAG, "Error parsing object texture; error: " + e);
@@ -637,8 +637,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     try {
-      InputStream inputStream = getAssets().open(DINO_TEXTURE);
-      dinoTexture = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
+      InputStream inputStream = getAssets().open(TEXTURE_FILE_2);
+      assetTexture2 = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
       inputStream.close();
     } catch (Exception e) {
       Log.e(TAG, "Error parsing object texture; error: " + e);

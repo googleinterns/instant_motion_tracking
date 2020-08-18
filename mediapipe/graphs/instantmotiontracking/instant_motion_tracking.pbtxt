@@ -51,8 +51,8 @@ node {
   input_stream: "USER_ROTATIONS:user_rotation_data"
   input_stream: "USER_SCALINGS:user_scaling_data"
   input_stream: "RENDER_DATA:sticker_render_data"
-  output_stream: "MATRICES:0:asset1_matrices"
-  output_stream: "MATRICES:1:asset2_matrices"
+  output_stream: "MATRICES:0:asset_1_matrices"
+  output_stream: "MATRICES:1:asset_2_matrices"
   output_stream: "MATRICES:2:gif_matrices"
   input_side_packet: "FOV:vertical_fov_radians"
   input_side_packet: "ASPECT_RATIO:aspect_ratio"
@@ -62,26 +62,26 @@ node {
 node {
   calculator: "GlAnimationOverlayCalculator"
   input_stream: "VIDEO:input_video"
-  input_stream: "MODEL_MATRICES:asset1_matrices"
-  input_side_packet: "TEXTURE:asset1_texture"
-  input_side_packet: "ANIMATION_ASSET:asset1_name"
-  output_stream: "asset1_rendered_video"
+  input_stream: "MODEL_MATRICES:asset_1_matrices"
+  input_side_packet: "TEXTURE:texture_1"
+  input_side_packet: "ANIMATION_ASSET:asset_1"
+  output_stream: "asset_1_rendered"
 }
 
 # Renders the final 3d stickers and overlays them on input image.
 node {
   calculator: "GlAnimationOverlayCalculator"
-  input_stream: "VIDEO:asset1_rendered_video"
-  input_stream: "MODEL_MATRICES:asset2_matrices"
-  input_side_packet: "TEXTURE:asset2_texture"
-  input_side_packet: "ANIMATION_ASSET:asset2_name"
-  output_stream: "asset2_rendered_video"
+  input_stream: "VIDEO:asset_1_rendered"
+  input_stream: "MODEL_MATRICES:asset_2_matrices"
+  input_side_packet: "TEXTURE:texture_2"
+  input_side_packet: "ANIMATION_ASSET:asset_2"
+  output_stream: "asset_2_rendered"
 }
 
 # Renders the final 3d stickers and overlays them on input image.
 node {
   calculator: "GlAnimationOverlayCalculator"
-  input_stream: "VIDEO:asset2_rendered_video"
+  input_stream: "VIDEO:asset_2_rendered"
   input_stream: "MODEL_MATRICES:gif_matrices"
   input_stream: "TEXTURE:gif_texture"
   input_side_packet: "ANIMATION_ASSET:gif_asset_name"

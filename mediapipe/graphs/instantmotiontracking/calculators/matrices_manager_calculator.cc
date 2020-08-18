@@ -115,10 +115,10 @@ class MatricesManagerCalculator : public CalculatorBase {
     // the specified render id in order to ensure all objects render at a similar
     // size in the view screen upon initial placement
     const float GetDefaultRenderScale(const int render_id) {
-      if (render_id == 0) { // Robot
+      if (render_id == 0) { // Asset 1
         return 5.0f;
       }
-      else if (render_id == 1) { // Dino
+      else if (render_id == 1) { // Asset 2
         return 0.75f;
       }
       else if (render_id == 2) { // GIF
@@ -163,13 +163,13 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
 
 ::mediapipe::Status MatricesManagerCalculator::Process(CalculatorContext* cc) {
   // Define each object's model matrices
-  auto robot_matrices = std::make_unique<TimedModelMatrixProtoList>();
-  auto dino_matrices = std::make_unique<TimedModelMatrixProtoList>();
-  auto gif_matrices = std::make_unique<TimedModelMatrixProtoList>();
+  auto asset_matrices_1 = std::make_unique<TimedModelMatrixProtoList>();
+  auto asset_matrices_2 = std::make_unique<TimedModelMatrixProtoList>();
+  auto asset_matrices_gif = std::make_unique<TimedModelMatrixProtoList>();
   // Clear all model matrices
-  robot_matrices.get()->clear_model_matrix();
-  dino_matrices.get()->clear_model_matrix();
-  gif_matrices.get()->clear_model_matrix();
+  asset_matrices_1.get()->clear_model_matrix();
+  asset_matrices_2.get()->clear_model_matrix();
+  asset_matrices_gif.get()->clear_model_matrix();
 
   const std::vector<UserRotation> user_rotation_data =
       cc->Inputs().Tag(kUserRotationsTag).Get<std::vector<UserRotation>>();
@@ -204,14 +204,14 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     TimedModelMatrixProto* model_matrix;
 
     // Add model matrix to matrices list for defined object render ID
-    if (render_data[render_idx] == 0) { // robot
-      model_matrix = robot_matrices.get()->add_model_matrix();
+    if (render_data[render_idx] == 0) { // Asset 1
+      model_matrix = asset_matrices_1.get()->add_model_matrix();
     }
-    else if (render_data[render_idx] == 1) { // dino
-      model_matrix = dino_matrices.get()->add_model_matrix();
+    else if (render_data[render_idx] == 1) { // Asset 2
+      model_matrix = asset_matrices_2.get()->add_model_matrix();
     }
     else if (render_data[render_idx] == 2) { // GIF
-      model_matrix = gif_matrices.get()->add_model_matrix();
+      model_matrix = asset_matrices_gif.get()->add_model_matrix();
     }
 
     model_matrix->set_id(id);
@@ -250,13 +250,13 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   // Output all individual render matrices
   cc->Outputs()
           .Get(cc->Outputs().GetId("MATRICES", 0))
-          .Add(robot_matrices.release(), cc->InputTimestamp());
+          .Add(asset_matrices_1.release(), cc->InputTimestamp());
   cc->Outputs()
           .Get(cc->Outputs().GetId("MATRICES", 1))
-          .Add(dino_matrices.release(), cc->InputTimestamp());
+          .Add(asset_matrices_2.release(), cc->InputTimestamp());
   cc->Outputs()
           .Get(cc->Outputs().GetId("MATRICES", 2))
-          .Add(gif_matrices.release(), cc->InputTimestamp());
+          .Add(asset_matrices_gif.release(), cc->InputTimestamp());
 
   return ::mediapipe::OkStatus();
 }

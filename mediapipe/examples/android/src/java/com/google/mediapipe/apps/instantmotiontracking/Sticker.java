@@ -31,8 +31,8 @@ public class Sticker {
   /** All types of possible renders for our application. */
   public enum Render {
     // Every possible render for a sticker object
-    ROBOT,
-    DINO,
+    ASSET_1,
+    ASSET_2,
     GIF;
 
     /**
