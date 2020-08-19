@@ -854,6 +854,8 @@ void GlAnimationOverlayCalculator::LoadModelMatrices(
       vec4 pixel = texture2D(texture, sampleCoordinate);
       // If the alpha (background) value is near transparent, then discard the
       // pixel, this allows the rendering of transparent background GIFs
+      // TODO: Adding a toggle to perform pixel alpha discarding for transparent
+      // GIFs (prevent interference with Objectron system).
       if (pixel.a < 0.2) discard;
 
       // Generate directional lighting effect
