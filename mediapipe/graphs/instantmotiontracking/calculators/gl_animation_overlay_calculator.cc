@@ -116,12 +116,12 @@ typedef std::unique_ptr<float[]> ModelMatrix;
 }  // namespace
 
 // Functions to help in calculation of normals
-namespace Normals {
+namespace {
   // Calculates and sets the triangle_mesh normals
   void CalculateTriangleMeshNormals(mediapipe::TriangleMesh &triangle_mesh,
     int normals_len);
   // Normalize the 3-element float array
-  void Normalize3f(float arr[3]);
+  void Normalize3f(float input[3]);
 }
 
 class GlAnimationOverlayCalculator : public CalculatorBase {
@@ -236,7 +236,7 @@ REGISTER_CALCULATOR(GlAnimationOverlayCalculator);
   return ::mediapipe::OkStatus();
 }
 
-void Normals::CalculateTriangleMeshNormals(TriangleMesh &triangle_mesh,
+void CalculateTriangleMeshNormals(TriangleMesh &triangle_mesh,
   int normals_len) {
   // Set triangle_mesh normals for shader usage
   triangle_mesh.normals.reset(new float[normals_len]);
@@ -302,7 +302,7 @@ void Normals::CalculateTriangleMeshNormals(TriangleMesh &triangle_mesh,
   }
 }
 
-void Normals::Normalize3f(float input[3]) {
+void Normalize3f(float input[3]) {
   float product = 0.0;
   product += input[0] * input[0];
   product += input[1] * input[1];
@@ -418,7 +418,7 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     }
 
     // Set the normals for this triangle_mesh
-    Normals::CalculateTriangleMeshNormals(triangle_mesh, lengths[0]);
+    CalculateTriangleMeshNormals(triangle_mesh, lengths[0]);
 
     frame_count_++;
   }
@@ -486,7 +486,7 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
     }
 
     // Set the normals for this triangle_mesh
-    Normals::CalculateTriangleMeshNormals(triangle_mesh, lengths[0]);
+    CalculateTriangleMeshNormals(triangle_mesh, lengths[0]);
 
     frame_count_++;
   }
