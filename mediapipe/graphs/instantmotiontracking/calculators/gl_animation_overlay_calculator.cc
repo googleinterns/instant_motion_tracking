@@ -159,17 +159,7 @@ class GlAnimationOverlayCalculator : public CalculatorBase {
   float perspective_matrix_[kNumMatrixEntries];
 
   // Used to normalize a 3-element float array (vertex normal)
-  void Normalize3f(float input[3]) {
-    float product = 0.0;
-    product += input[0] * input[0];
-    product += input[1] * input[1];
-    product += input[2] * input[2];
-    float magnitude = sqrt(product);
-    input[0] /= magnitude;
-    input[1] /= magnitude;
-    input[2] /= magnitude;
-  }
-
+  void Normalize3f(float input[3]);
   void ComputeAspectRatioAndFovFromCameraParameters(
       const CameraParametersProto &camera_parameters, float *aspect_ratio,
       float *vertical_fov_degrees);
@@ -238,6 +228,18 @@ REGISTER_CALCULATOR(GlAnimationOverlayCalculator);
   }
 
   return ::mediapipe::OkStatus();
+}
+
+// Normalizes the 3-element float input array
+void GlAnimationOverlayCalculator::Normalize3f(float input[3]) {
+  float product = 0.0;
+  product += input[0] * input[0];
+  product += input[1] * input[1];
+  product += input[2] * input[2];
+  float magnitude = sqrt(product);
+  input[0] /= magnitude;
+  input[1] /= magnitude;
+  input[2] /= magnitude;
 }
 
 // Helper function for initializing our perspective matrix.
@@ -349,8 +351,6 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
 
     // Used for storing the vertex normals prior to averaging
     float vertex_normals_sum[lengths[0]];
-    int vertex_denom[lengths[0]];
-
     // Compute every triangle surface normal and store them for averaging
     for (int idx = 0; idx < lengths[2]; idx += 3) {
       int v_idx[3];
@@ -393,9 +393,6 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
         vertex_normals_sum[v_idx[i] * 3] += normal_x;
         vertex_normals_sum[v_idx[i] * 3 + 1] += normal_y;
         vertex_normals_sum[v_idx[i] * 3 + 2] += normal_z;
-        vertex_denom[v_idx[i] * 3]++;
-        vertex_denom[v_idx[i] * 3 + 1]++;
-        vertex_denom[v_idx[i] * 3 + 2]++;
       }
     }
 
@@ -404,9 +401,9 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
     // averaging the combined value.
     for (int idx = 0; idx < lengths[0]; idx += 3) {
       float normal[3];
-      normal[0] = vertex_normals_sum[idx] / vertex_denom[idx];
-      normal[1] = vertex_normals_sum[idx + 1] / vertex_denom[idx + 1];
-      normal[2] = vertex_normals_sum[idx + 2] / vertex_denom[idx + 2];
+      normal[0] = vertex_normals_sum[idx];
+      normal[1] = vertex_normals_sum[idx + 1];
+      normal[2] = vertex_normals_sum[idx + 2];
       Normalize3f(normal);
       triangle_mesh.normals.get()[idx] = normal[0];
       triangle_mesh.normals.get()[idx + 1] = normal[1];
@@ -483,8 +480,6 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
 
     // Used for storing the vertex normals prior to averaging
     float vertex_normals_sum[lengths[0]];
-    int vertex_denom[lengths[0]];
-
     // Compute every triangle surface normal and store them for averaging
     for (int idx = 0; idx < lengths[2]; idx += 3) {
       int v_idx[3];
@@ -527,9 +522,6 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
         vertex_normals_sum[v_idx[i] * 3] += normal_x;
         vertex_normals_sum[v_idx[i] * 3 + 1] += normal_y;
         vertex_normals_sum[v_idx[i] * 3 + 2] += normal_z;
-        vertex_denom[v_idx[i] * 3]++;
-        vertex_denom[v_idx[i] * 3 + 1]++;
-        vertex_denom[v_idx[i] * 3 + 2]++;
       }
     }
 
@@ -538,9 +530,9 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
     // averaging the combined value.
     for (int idx = 0; idx < lengths[0]; idx += 3) {
       float normal[3];
-      normal[0] = vertex_normals_sum[idx] / vertex_denom[idx];
-      normal[1] = vertex_normals_sum[idx + 1] / vertex_denom[idx + 1];
-      normal[2] = vertex_normals_sum[idx + 2] / vertex_denom[idx + 2];
+      normal[0] = vertex_normals_sum[idx];
+      normal[1] = vertex_normals_sum[idx + 1];
+      normal[2] = vertex_normals_sum[idx + 2];
       Normalize3f(normal);
       triangle_mesh.normals.get()[idx] = normal[0];
       triangle_mesh.normals.get()[idx + 1] = normal[1];
