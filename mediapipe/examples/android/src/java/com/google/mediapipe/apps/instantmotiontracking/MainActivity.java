@@ -133,12 +133,6 @@ public class MainActivity extends AppCompatActivity {
   private final String ASSET_FILE_1 = "asset_1.obj.uuu";
   private final String TEXTURE_TAG_1 = "texture_1";
   private final String ASSET_TAG_1 = "asset_1";
-  // All animation assets and tags for the second asset (2)
-  private Bitmap assetTexture2 = null;
-  private final String TEXTURE_FILE_2 = "texture_2.bmp";
-  private final String ASSET_FILE_2 = "asset_2.obj.uuu";
-  private final String TEXTURE_TAG_2 = "texture_2";
-  private final String ASSET_TAG_2 = "asset_2";
   // All GIF animation assets and tags
   private GIFEditText editText;
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
@@ -211,10 +205,6 @@ public class MainActivity extends AppCompatActivity {
       packetCreator.createRgbaImageFrame(assetTexture1));
     inputSidePackets.put(ASSET_TAG_1,
       packetCreator.createString(ASSET_FILE_1));
-    inputSidePackets.put(TEXTURE_TAG_2,
-      packetCreator.createRgbaImageFrame(assetTexture2));
-    inputSidePackets.put(ASSET_TAG_2,
-      packetCreator.createString(ASSET_FILE_2));
     inputSidePackets.put(GIF_ASSET_TAG,
       packetCreator.createString(GIF_FILE));
     processor.setInputSidePackets(inputSidePackets);
@@ -420,12 +410,11 @@ public class MainActivity extends AppCompatActivity {
                 refreshUi();
               }
             });
-        if (sticker.getRender() == Sticker.Render.ASSET_1) {
-          setStickerButtonDesign(stickerButton, R.drawable.asset_preview_1);
-        } else if (sticker.getRender() == Sticker.Render.ASSET_2) {
-          setStickerButtonDesign(stickerButton, R.drawable.asset_preview_2);
-        } else if (sticker.getRender() == Sticker.Render.GIF) {
+        if (sticker.getRender() == Sticker.Render.GIF) {
           setControlButtonDesign(stickerButton, R.drawable.asset_preview_gif);
+        }
+        else if (sticker.getRender() == Sticker.Render.ASSET_1) {
+          setStickerButtonDesign(stickerButton, R.drawable.asset_preview_1);
         }
 
         buttonLayout.addView(stickerButton);
@@ -628,28 +617,19 @@ public class MainActivity extends AppCompatActivity {
     decodeOptions.inPremultiplied = false;
 
     try {
-      InputStream inputStream = getAssets().open(TEXTURE_FILE_1);
-      assetTexture1 = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
-      inputStream.close();
-    } catch (Exception e) {
-      Log.e(TAG, "Error parsing object texture; error: " + e);
-      throw new IllegalStateException(e);
-    }
-
-    try {
-      InputStream inputStream = getAssets().open(TEXTURE_FILE_2);
-      assetTexture2 = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
-      inputStream.close();
-    } catch (Exception e) {
-      Log.e(TAG, "Error parsing object texture; error: " + e);
-      throw new IllegalStateException(e);
-    }
-
-    try {
       InputStream inputStream = getAssets().open(DEFAULT_GIF_TEXTURE);
       defaultGIFTexture =
           flipHorizontal(
               BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions));
+      inputStream.close();
+    } catch (Exception e) {
+      Log.e(TAG, "Error parsing object texture; error: " + e);
+      throw new IllegalStateException(e);
+    }
+
+    try {
+      InputStream inputStream = getAssets().open(TEXTURE_FILE_1);
+      assetTexture1 = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
       inputStream.close();
     } catch (Exception e) {
       Log.e(TAG, "Error parsing object texture; error: " + e);

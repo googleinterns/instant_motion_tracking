@@ -31,9 +31,8 @@ public class Sticker {
   /** All types of possible renders for our application. */
   public enum Render {
     // Every possible render for a sticker object
-    ASSET_1,
-    ASSET_2,
-    GIF;
+    GIF,
+    ASSET_1;
 
     /**
      * Once called, will set the value of the current render to the next
@@ -71,8 +70,8 @@ public class Sticker {
    * default Render of the first possible render in our Render enum.
    */
   public Sticker() {
-    // Every sticker will have a default render of the robot animation
-    this.currentRender = Render.values()[0];
+    // Every sticker will have a default render of the first non-GIF asset
+    this.currentRender = Render.values()[1];
     // Sticker will render out of view by default
     this.setAnchorCoordinate(2.0f, 2.0f);
     // Set the global sticker ID limit for the next sticker
