@@ -42,7 +42,7 @@ public class Sticker {
     public Render iterate() {
       int newEnumIdx = (this.ordinal() + 1) % Render.values().length;
       return Render.values()[newEnumIdx];
-    }
+   }
   }
 
   // Current render of the sticker object
