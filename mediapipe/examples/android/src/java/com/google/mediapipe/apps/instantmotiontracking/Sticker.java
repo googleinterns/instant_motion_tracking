@@ -28,7 +28,7 @@ import java.util.ArrayList;
  */
 public class Sticker {
 
-  /** All types of possible renders for our application. */
+  /** All types of possible objects to render for our application. */
   public enum Render {
     // Every possible render for a sticker object
     GIF,
