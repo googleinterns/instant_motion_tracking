@@ -102,7 +102,6 @@ static const float kModelMatrix[] = {0.83704215,  -0.36174262, 0.41049102, 0.0,
 
 // Simple helper-struct for containing the parsed geometry data from a 3D
 // animation frame for rendering.
-
 struct TriangleMesh {
   int index_count = 0;  // Needed for glDrawElements rendering call
   std::unique_ptr<float[]> normals = nullptr;
@@ -114,15 +113,6 @@ struct TriangleMesh {
 typedef std::unique_ptr<float[]> ModelMatrix;
 
 }  // namespace
-
-// Functions to help in calculation of normals
-namespace {
-  // Calculates and sets the triangle_mesh normals
-  void CalculateTriangleMeshNormals(mediapipe::TriangleMesh &triangle_mesh,
-    int normals_len);
-  // Normalize the 3-element float array
-  void Normalize3f(float input[3]);
-}
 
 class GlAnimationOverlayCalculator : public CalculatorBase {
  public:
@@ -180,6 +170,9 @@ class GlAnimationOverlayCalculator : public CalculatorBase {
                                    float z_far);
   void LoadModelMatrices(const TimedModelMatrixProtoList &model_matrices,
                          std::vector<ModelMatrix> *current_model_matrices);
+   void CalculateTriangleMeshNormals(TriangleMesh &triangle_mesh,
+     int normals_len);
+   void Normalize3f(float input[3]);
 
 #if !defined(__ANDROID__)
   // Asset loading routine for all non-Android platforms.
@@ -236,8 +229,8 @@ REGISTER_CALCULATOR(GlAnimationOverlayCalculator);
   return ::mediapipe::OkStatus();
 }
 
-void CalculateTriangleMeshNormals(TriangleMesh &triangle_mesh,
-  int normals_len) {
+void GlAnimationOverlayCalculator::CalculateTriangleMeshNormals(
+  TriangleMesh &triangle_mesh, int normals_len) {
   // Set triangle_mesh normals for shader usage
   triangle_mesh.normals.reset(new float[normals_len]);
   // Used for storing the vertex normals prior to averaging
@@ -302,7 +295,7 @@ void CalculateTriangleMeshNormals(TriangleMesh &triangle_mesh,
   }
 }
 
-void Normalize3f(float input[3]) {
+void GlAnimationOverlayCalculator::Normalize3f(float input[3]) {
   float product = 0.0;
   product += input[0] * input[0];
   product += input[1] * input[1];
