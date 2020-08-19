@@ -52,7 +52,7 @@ node {
   input_stream: "USER_SCALINGS:user_scaling_data"
   input_stream: "RENDER_DATA:sticker_render_data"
   output_stream: "MATRICES:0:gif_matrices"
-  output_stream: "MATRICES:1:asset_1_matrices"
+  output_stream: "MATRICES:1:asset_3d_matrices"
   input_side_packet: "FOV:vertical_fov_radians"
   input_side_packet: "ASPECT_RATIO:aspect_ratio"
 }
@@ -71,8 +71,8 @@ node {
 node {
   calculator: "GlAnimationOverlayCalculator"
   input_stream: "VIDEO:asset_gif_rendered"
-  input_stream: "MODEL_MATRICES:asset_1_matrices"
-  input_side_packet: "TEXTURE:texture_1"
-  input_side_packet: "ASSET:asset_1"
+  input_stream: "MODEL_MATRICES:asset_3d_matrices"
+  input_side_packet: "TEXTURE:texture_3d"
+  input_side_packet: "ASSET:asset_3d"
   output_stream: "output_video"
 }

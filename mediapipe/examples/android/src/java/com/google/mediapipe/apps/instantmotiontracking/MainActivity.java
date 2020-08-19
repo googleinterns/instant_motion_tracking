@@ -128,11 +128,11 @@ public class MainActivity extends AppCompatActivity {
   // All animation assets and tags for the first asset (1)
   // TODO: Grouping all tags and assets into a seperate structure
   // TODO: bitmaps are space heavy, try to use compressed like png/webp
-  private Bitmap assetTexture1 = null;
-  private final String TEXTURE_FILE_1 = "texture_1.bmp";
-  private final String ASSET_FILE_1 = "asset_1.obj.uuu";
-  private final String TEXTURE_TAG_1 = "texture_1";
-  private final String ASSET_TAG_1 = "asset_1";
+  private Bitmap asset3dTexture = null;
+  private final String ASSET_3D_TEXTURE = "robot_texture.bmp";
+  private final String ASSET_3D_FILE = "robot.obj.uuu";
+  private final String ASSET_3D_TEXTURE_TAG = "texture_3d";
+  private final String ASSET_3D_TAG = "asset_3d";
   // All GIF animation assets and tags
   private GIFEditText editText;
   private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
@@ -182,7 +182,7 @@ public class MainActivity extends AppCompatActivity {
     setupPreviewDisplayView();
 
     // Initialize asset manager so that MediaPipe native libraries can access
-    // the app assets, e.g.,binary graphs.
+    // the app assets, e.g. binary graphs.
     AndroidAssetUtil.initializeNativeAssetManager(this);
     eglManager = new EglManager(null);
     processor =
@@ -201,10 +201,10 @@ public class MainActivity extends AppCompatActivity {
 
     // TODO: Should come from querying the video frame
     Map<String, Packet> inputSidePackets = new HashMap<>();
-    inputSidePackets.put(TEXTURE_TAG_1,
-      packetCreator.createRgbaImageFrame(assetTexture1));
-    inputSidePackets.put(ASSET_TAG_1,
-      packetCreator.createString(ASSET_FILE_1));
+    inputSidePackets.put(ASSET_3D_TEXTURE_TAG,
+      packetCreator.createRgbaImageFrame(asset3dTexture));
+    inputSidePackets.put(ASSET_3D_TAG,
+      packetCreator.createString(ASSET_3D_FILE));
     inputSidePackets.put(GIF_ASSET_TAG,
       packetCreator.createString(GIF_FILE));
     processor.setInputSidePackets(inputSidePackets);
@@ -411,10 +411,10 @@ public class MainActivity extends AppCompatActivity {
               }
             });
         if (sticker.getRender() == Sticker.Render.GIF) {
-          setControlButtonDesign(stickerButton, R.drawable.asset_preview_gif);
+          setControlButtonDesign(stickerButton, R.drawable.asset_gif_preview);
         }
-        else if (sticker.getRender() == Sticker.Render.ASSET_1) {
-          setStickerButtonDesign(stickerButton, R.drawable.asset_preview_1);
+        else if (sticker.getRender() == Sticker.Render.ASSET_3D) {
+          setStickerButtonDesign(stickerButton, R.drawable.asset_3d_preview);
         }
 
         buttonLayout.addView(stickerButton);
@@ -628,8 +628,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     try {
-      InputStream inputStream = getAssets().open(TEXTURE_FILE_1);
-      assetTexture1 = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
+      InputStream inputStream = getAssets().open(ASSET_3D_TEXTURE);
+      asset3dTexture = BitmapFactory.decodeStream(inputStream, null /*outPadding*/, decodeOptions);
       inputStream.close();
     } catch (Exception e) {
       Log.e(TAG, "Error parsing object texture; error: " + e);
