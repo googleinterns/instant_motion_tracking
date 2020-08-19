@@ -240,6 +240,8 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   }
 
   // Output all individual render matrices
+  // TODO: Perform depth ordering with gl_animation_overlay_calculator to render
+  // objects in order by depth to allow occlusion.
   cc->Outputs()
           .Get(cc->Outputs().GetId("MATRICES", 0))
           .Add(asset_matrices_gif.release(), cc->InputTimestamp());
