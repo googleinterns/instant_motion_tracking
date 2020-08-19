@@ -115,6 +115,15 @@ typedef std::unique_ptr<float[]> ModelMatrix;
 
 }  // namespace
 
+// Functions to help in calculation of normals
+namespace Normals {
+  // Calculates and sets the triangle_mesh normals
+  void CalculateTriangleMeshNormals(mediapipe::TriangleMesh &triangle_mesh,
+    int normals_len);
+  // Normalize the 3-element float array
+  void Normalize3f(float arr[3]);
+}
+
 class GlAnimationOverlayCalculator : public CalculatorBase {
  public:
   GlAnimationOverlayCalculator() {}
@@ -157,9 +166,6 @@ class GlAnimationOverlayCalculator : public CalculatorBase {
   // prior to passing through to the shader as a MVP matrix.  Initialized during
   // first image packet read.
   float perspective_matrix_[kNumMatrixEntries];
-
-  // Used to normalize a 3-element float array (vertex normal)
-  void Normalize3f(float input[3]);
   void ComputeAspectRatioAndFovFromCameraParameters(
       const CameraParametersProto &camera_parameters, float *aspect_ratio,
       float *vertical_fov_degrees);
@@ -230,8 +236,73 @@ REGISTER_CALCULATOR(GlAnimationOverlayCalculator);
   return ::mediapipe::OkStatus();
 }
 
-// Normalizes the 3-element float input array
-void GlAnimationOverlayCalculator::Normalize3f(float input[3]) {
+void Normals::CalculateTriangleMeshNormals(TriangleMesh &triangle_mesh,
+  int normals_len) {
+  // Set triangle_mesh normals for shader usage
+  triangle_mesh.normals.reset(new float[normals_len]);
+  // Used for storing the vertex normals prior to averaging
+  float vertex_normals_sum[normals_len];
+  // Compute every triangle surface normal and store them for averaging
+  for (int idx = 0; idx < triangle_mesh.index_count; idx += 3) {
+    int v_idx[3];
+    v_idx[0] = triangle_mesh.triangle_indices.get()[idx];
+    v_idx[1] = triangle_mesh.triangle_indices.get()[idx + 1];
+    v_idx[2] = triangle_mesh.triangle_indices.get()[idx + 2];
+    // (V1) vertex X,Y,Z indices in triangle_mesh.vertices
+    float V1x = triangle_mesh.vertices[v_idx[0] * 3];
+    float V1y = triangle_mesh.vertices[v_idx[0] * 3 + 1];
+    float V1z = triangle_mesh.vertices[v_idx[0] * 3 + 2];
+    // (V2) vertex X,Y,Z indices in triangle_mesh.vertices
+    float V2x = triangle_mesh.vertices[v_idx[1] * 3];
+    float V2y = triangle_mesh.vertices[v_idx[1] * 3 + 1];
+    float V2z = triangle_mesh.vertices[v_idx[1] * 3 + 2];
+    // (V3) vertex X,Y,Z indices in triangle_mesh.vertices
+    float V3x = triangle_mesh.vertices[v_idx[2] * 3];
+    float V3y = triangle_mesh.vertices[v_idx[2] * 3 + 1];
+    float V3z = triangle_mesh.vertices[v_idx[2] * 3 + 2];
+    // Calculate normals from vertices
+    // V2 - V1
+    float Ax = V2x - V1x;
+    float Ay = V2y - V1y;
+    float Az = V2z - V1z;
+    // V3 - V1
+    float Bx = V3x - V1x;
+    float By = V3y - V1y;
+    float Bz = V3z - V1z;
+    // Calculate cross product
+    float normal_x = Ay * Bz - Az * By;
+    float normal_y = Az * Bx - Ax * Bz;
+    float normal_z = Ax * By - Ay * Bx;
+    // The normals calculated above must be normalized if we wish to prevent
+    // triangles with a larger surface area from dominating the normal
+    // calculations, however, none of our current models require this
+    // normalization.
+
+    // Add connected normal to each associated vertex
+    // It is also necessary to increment each vertex denominator for averaging
+    for (int i = 0; i < 3; i++) {
+      vertex_normals_sum[v_idx[i] * 3] += normal_x;
+      vertex_normals_sum[v_idx[i] * 3 + 1] += normal_y;
+      vertex_normals_sum[v_idx[i] * 3 + 2] += normal_z;
+    }
+  }
+
+  // Combine all triangle normals connected to each vertex by adding the X,Y,Z
+  // value of each adjacent triangle surface normal to every vertex and then
+  // averaging the combined value.
+  for (int idx = 0; idx < normals_len; idx += 3) {
+    float normal[3];
+    normal[0] = vertex_normals_sum[idx];
+    normal[1] = vertex_normals_sum[idx + 1];
+    normal[2] = vertex_normals_sum[idx + 2];
+    Normalize3f(normal);
+    triangle_mesh.normals.get()[idx] = normal[0];
+    triangle_mesh.normals.get()[idx + 1] = normal[1];
+    triangle_mesh.normals.get()[idx + 2] = normal[2];
+  }
+}
+
+void Normals::Normalize3f(float input[3]) {
   float product = 0.0;
   product += input[0] * input[0];
   product += input[1] * input[1];
@@ -346,69 +417,8 @@ bool GlAnimationOverlayCalculator::LoadAnimationAndroid(
       return false;
     }
 
-    // Set triangle_mesh normals for shader usage
-    triangle_mesh.normals.reset(new float[lengths[0]]);
-
-    // Used for storing the vertex normals prior to averaging
-    float vertex_normals_sum[lengths[0]];
-    // Compute every triangle surface normal and store them for averaging
-    for (int idx = 0; idx < lengths[2]; idx += 3) {
-      int v_idx[3];
-      v_idx[0] = triangle_mesh.triangle_indices.get()[idx];
-      v_idx[1] = triangle_mesh.triangle_indices.get()[idx + 1];
-      v_idx[2] = triangle_mesh.triangle_indices.get()[idx + 2];
-      // (V1) vertex X,Y,Z indices in triangle_mesh.vertices
-      float V1x = triangle_mesh.vertices[v_idx[0] * 3];
-      float V1y = triangle_mesh.vertices[v_idx[0] * 3 + 1];
-      float V1z = triangle_mesh.vertices[v_idx[0] * 3 + 2];
-      // (V2) vertex X,Y,Z indices in triangle_mesh.vertices
-      float V2x = triangle_mesh.vertices[v_idx[1] * 3];
-      float V2y = triangle_mesh.vertices[v_idx[1] * 3 + 1];
-      float V2z = triangle_mesh.vertices[v_idx[1] * 3 + 2];
-      // (V3) vertex X,Y,Z indices in triangle_mesh.vertices
-      float V3x = triangle_mesh.vertices[v_idx[2] * 3];
-      float V3y = triangle_mesh.vertices[v_idx[2] * 3 + 1];
-      float V3z = triangle_mesh.vertices[v_idx[2] * 3 + 2];
-      // Calculate normals from vertices
-      // V2 - V1
-      float Ax = V2x - V1x;
-      float Ay = V2y - V1y;
-      float Az = V2z - V1z;
-      // V3 - V1
-      float Bx = V3x - V1x;
-      float By = V3y - V1y;
-      float Bz = V3z - V1z;
-      // Calculate cross product
-      float normal_x = Ay * Bz - Az * By;
-      float normal_y = Az * Bx - Ax * Bz;
-      float normal_z = Ax * By - Ay * Bx;
-      // The normals calculated above must be normalized if we wish to prevent
-      // triangles with a larger surface area from dominating the normal
-      // calculations, however, none of our current models require this
-      // normalization.
-
-      // Add connected normal to each associated vertex
-      // It is also necessary to increment each vertex denominator for averaging
-      for (int i = 0; i < 3; i++) {
-        vertex_normals_sum[v_idx[i] * 3] += normal_x;
-        vertex_normals_sum[v_idx[i] * 3 + 1] += normal_y;
-        vertex_normals_sum[v_idx[i] * 3 + 2] += normal_z;
-      }
-    }
-
-    // Combine all triangle normals connected to each vertex by adding the X,Y,Z
-    // value of each adjacent triangle surface normal to every vertex and then
-    // averaging the combined value.
-    for (int idx = 0; idx < lengths[0]; idx += 3) {
-      float normal[3];
-      normal[0] = vertex_normals_sum[idx];
-      normal[1] = vertex_normals_sum[idx + 1];
-      normal[2] = vertex_normals_sum[idx + 2];
-      Normalize3f(normal);
-      triangle_mesh.normals.get()[idx] = normal[0];
-      triangle_mesh.normals.get()[idx + 1] = normal[1];
-      triangle_mesh.normals.get()[idx + 2] = normal[2];
-    }
+    // Set the normals for this triangle_mesh
+    Normals::CalculateTriangleMeshNormals(triangle_mesh, lengths[0]);
 
     frame_count_++;
   }
@@ -475,69 +485,8 @@ bool GlAnimationOverlayCalculator::LoadAnimation(const std::string &filename) {
       return false;
     }
 
-    // Set triangle_mesh normals for shader usage
-    triangle_mesh.normals.reset(new float[lengths[0]]);
-
-    // Used for storing the vertex normals prior to averaging
-    float vertex_normals_sum[lengths[0]];
-    // Compute every triangle surface normal and store them for averaging
-    for (int idx = 0; idx < lengths[2]; idx += 3) {
-      int v_idx[3];
-      v_idx[0] = triangle_mesh.triangle_indices.get()[idx];
-      v_idx[1] = triangle_mesh.triangle_indices.get()[idx + 1];
-      v_idx[2] = triangle_mesh.triangle_indices.get()[idx + 2];
-      // (V1) vertex X,Y,Z indices in triangle_mesh.vertices
-      float V1x = triangle_mesh.vertices[v_idx[0] * 3];
-      float V1y = triangle_mesh.vertices[v_idx[0] * 3 + 1];
-      float V1z = triangle_mesh.vertices[v_idx[0] * 3 + 2];
-      // (V2) vertex X,Y,Z indices in triangle_mesh.vertices
-      float V2x = triangle_mesh.vertices[v_idx[1] * 3];
-      float V2y = triangle_mesh.vertices[v_idx[1] * 3 + 1];
-      float V2z = triangle_mesh.vertices[v_idx[1] * 3 + 2];
-      // (V3) vertex X,Y,Z indices in triangle_mesh.vertices
-      float V3x = triangle_mesh.vertices[v_idx[2] * 3];
-      float V3y = triangle_mesh.vertices[v_idx[2] * 3 + 1];
-      float V3z = triangle_mesh.vertices[v_idx[2] * 3 + 2];
-      // Calculate normals from vertices
-      // V2 - V1
-      float Ax = V2x - V1x;
-      float Ay = V2y - V1y;
-      float Az = V2z - V1z;
-      // V3 - V1
-      float Bx = V3x - V1x;
-      float By = V3y - V1y;
-      float Bz = V3z - V1z;
-      // Calculate cross product
-      float normal_x = Ay * Bz - Az * By;
-      float normal_y = Az * Bx - Ax * Bz;
-      float normal_z = Ax * By - Ay * Bx;
-      // The normals calculated above must be normalized if we wish to prevent
-      // triangles with a larger surface area from dominating the normal
-      // calculations, however, none of our current models require this
-      // normalization.
-
-      // Add connected normal to each associated vertex
-      // It is also necessary to increment each vertex denominator for averaging
-      for (int i = 0; i < 3; i++) {
-        vertex_normals_sum[v_idx[i] * 3] += normal_x;
-        vertex_normals_sum[v_idx[i] * 3 + 1] += normal_y;
-        vertex_normals_sum[v_idx[i] * 3 + 2] += normal_z;
-      }
-    }
-
-    // Combine all triangle normals connected to each vertex by adding the X,Y,Z
-    // value of each adjacent triangle surface normal to every vertex and then
-    // averaging the combined value.
-    for (int idx = 0; idx < lengths[0]; idx += 3) {
-      float normal[3];
-      normal[0] = vertex_normals_sum[idx];
-      normal[1] = vertex_normals_sum[idx + 1];
-      normal[2] = vertex_normals_sum[idx + 2];
-      Normalize3f(normal);
-      triangle_mesh.normals.get()[idx] = normal[0];
-      triangle_mesh.normals.get()[idx + 1] = normal[1];
-      triangle_mesh.normals.get()[idx + 2] = normal[2];
-    }
+    // Set the normals for this triangle_mesh
+    Normals::CalculateTriangleMeshNormals(triangle_mesh, lengths[0]);
 
     frame_count_++;
   }
