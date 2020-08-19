@@ -63,7 +63,7 @@ node {
   input_stream: "VIDEO:input_video"
   input_stream: "MODEL_MATRICES:gif_matrices"
   input_stream: "TEXTURE:gif_texture"
-  input_side_packet: "ASSET:gif_asset_name"
+  input_side_packet: "ANIMATION_ASSET:gif_asset_name"
   output_stream: "asset_gif_rendered"
 }
 
@@ -73,6 +73,6 @@ node {
   input_stream: "VIDEO:asset_gif_rendered"
   input_stream: "MODEL_MATRICES:asset_3d_matrices"
   input_side_packet: "TEXTURE:texture_3d"
-  input_side_packet: "ASSET:asset_3d"
+  input_side_packet: "ANIMATION_ASSET:asset_3d"
   output_stream: "output_video"
 }
