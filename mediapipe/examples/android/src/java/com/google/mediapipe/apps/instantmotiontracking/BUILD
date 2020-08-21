@@ -3,12 +3,16 @@ licenses(["notice"])  # Apache 2.0
 package(default_visibility = ["//visibility:private"])
 
 android_library(
-    name = "basic_lib",
+    name = "instantmotiontracking_lib",
     srcs = glob(["*.java"]),
-    manifest = "AndroidManifest.xml",
-    resource_files = glob(["res/**"]),
+    manifest = "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/basic:AndroidManifest.xml",
+    resource_files = glob([
+        "res/layout/**",
+        "res/drawable/**",
+    ]),
     visibility = ["//visibility:public"],
     deps = [
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/basic:basic_lib",
         "//mediapipe/java/com/google/mediapipe/components:android_camerax_helper",
         "//mediapipe/java/com/google/mediapipe/components:android_components",
         "//mediapipe/java/com/google/mediapipe/framework:android_framework",
@@ -17,8 +21,8 @@ android_library(
         "//third_party:androidx_constraint_layout",
         "//third_party:opencv",
         "@maven//:androidx_concurrent_concurrent_futures",
-        "@maven//:androidx_core_core",
         "@maven//:com_google_guava_guava",
+        "@maven//:androidx_core_core",
         "@maven//:com_github_bumptech_glide_glide",
         "@maven//:com_github_bumptech_glide_gifdecoder",
         "@com_google_protobuf//:protobuf_java",
@@ -53,7 +57,7 @@ android_binary(
         "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/robot:robot_texture.bmp",
     ],
     assets_dir = "",
-    manifest = "AndroidManifest.xml",
+    manifest = "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/basic:AndroidManifest.xml",
     manifest_values = {
         "applicationId": "com.google.mediapipe.apps.instantmotiontracking",
         "appName": "Instant Motion Tracking",
@@ -62,10 +66,11 @@ android_binary(
         "binaryGraphName": "mobile.binarypb",
         "inputVideoStreamName": "input_video",
         "outputVideoStreamName": "output_video",
+        "flipFramesVertically": "True",
     },
     multidex = "native",
     deps = [
         ":mediapipe_jni_lib",
-        ":basic_lib",
+        ":instantmotiontracking_lib",
     ],
 )
