@@ -17,10 +17,14 @@ package com.google.mediapipe.apps.instantmotiontracking;
 import android.content.ClipDescription;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Matrix;
+import android.graphics.SurfaceTexture;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -28,22 +32,32 @@ import android.hardware.SensorManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Size;
 import android.view.MotionEvent;
-import android.view.inputmethod.InputMethodManager;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.gifdecoder.StandardGifDecoder;
 import com.bumptech.glide.load.resource.gif.GifDrawable;
 import com.bumptech.glide.request.target.SimpleTarget;
 import com.bumptech.glide.request.transition.Transition;
+import com.google.mediapipe.components.CameraHelper;
+import com.google.mediapipe.components.CameraXPreviewHelper;
+import com.google.mediapipe.components.ExternalTextureConverter;
 import com.google.mediapipe.components.FrameProcessor;
+import com.google.mediapipe.components.PermissionHelper;
+import com.google.mediapipe.framework.AndroidAssetUtil;
 import com.google.mediapipe.framework.AndroidPacketCreator;
 import com.google.mediapipe.framework.Packet;
+import com.google.mediapipe.glutil.EglManager;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -57,6 +71,13 @@ import java.util.Map;
  */
 public class MainActivity extends com.google.mediapipe.apps.basic.MainActivity {
   private static final String TAG = "MainActivity";
+  private static final boolean FLIP_FRAMES_VERTICALLY = true;
+
+  private SurfaceTexture previewFrameTexture;
+  private SurfaceView previewDisplayView;
+  private EglManager eglManager;
+  private ExternalTextureConverter converter;
+  private ApplicationInfo applicationInfo;
 
   // Allows for automated packet transmission to graph
   private MediaPipePacketManager mediaPipePacketManager;
@@ -116,6 +137,7 @@ public class MainActivity extends com.google.mediapipe.apps.basic.MainActivity {
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
+
     super.onCreate(savedInstanceState);
     setContentView(R.layout.imt_activity_main);
 
@@ -136,6 +158,31 @@ public class MainActivity extends com.google.mediapipe.apps.basic.MainActivity {
             closeKeyboard();
           }
         });
+
+    try {
+      applicationInfo =
+          getPackageManager().getApplicationInfo(
+          getPackageName(),PackageManager.GET_META_DATA);
+    } catch (NameNotFoundException e) {
+      Log.e(TAG, "Cannot find application info: " + e);
+    }
+
+    previewDisplayView = new SurfaceView(this);
+    setupPreviewDisplayView();
+
+    // Initialize asset manager so that MediaPipe native libraries can access
+    // the app assets, e.g. binary graphs.
+    AndroidAssetUtil.initializeNativeAssetManager(this);
+    eglManager = new EglManager(null);
+    processor =
+        new FrameProcessor(
+            this,
+            eglManager.getNativeContext(),
+            applicationInfo.metaData.getString("binaryGraphName"),
+            applicationInfo.metaData.getString("inputVideoStreamName"),
+            applicationInfo.metaData.getString("outputVideoStreamName"));
+    processor.getVideoSurfaceOutput().setFlipY(FLIP_FRAMES_VERTICALLY);
+    PermissionHelper.checkAndRequestCameraPermissions(this);
 
     // Send loaded 3d render assets as side packets to graph
     prepareDemoAssets();
@@ -467,6 +514,66 @@ public class MainActivity extends com.google.mediapipe.apps.basic.MainActivity {
       InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
       imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
+  }
+
+  protected void onResume() {
+    super.onResume();
+    converter = new ExternalTextureConverter(eglManager.getContext());
+    converter.setFlipY(FLIP_FRAMES_VERTICALLY);
+    converter.setConsumer(processor);
+    if (PermissionHelper.cameraPermissionsGranted(this)) {
+      startCamera();
+    }
+  }
+
+  @Override
+  protected void onPause() {
+    super.onPause();
+    converter.close();
+  }
+
+  protected void onCameraStarted(SurfaceTexture surfaceTexture) {
+    previewFrameTexture = surfaceTexture;
+    previewDisplayView.setVisibility(View.VISIBLE);
+  }
+
+  private void setupPreviewDisplayView() {
+    previewDisplayView.setVisibility(View.GONE);
+    ViewGroup viewGroup = findViewById(R.id.preview_display_layout);
+    viewGroup.addView(previewDisplayView);
+
+    previewDisplayView
+        .getHolder()
+        .addCallback(
+            new SurfaceHolder.Callback() {
+              @Override
+              public void surfaceCreated(SurfaceHolder holder) {
+                processor.getVideoSurfaceOutput().setSurface(holder.getSurface());
+              }
+
+              @Override
+              public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                // (Re-)Compute the ideal size of the camera-preview display (the area that the
+                // camera-preview frames get rendered onto, potentially with scaling and rotation)
+                // based on the size of the SurfaceView that contains the display.
+                Size viewSize = new Size(width, height);
+                Size displaySize = cameraHelper.computeDisplaySizeFromViewSize(viewSize);
+                boolean isCameraRotated = cameraHelper.isCameraRotated();
+
+                // Connect the converter to the camera-preview frames as its input (via
+                // previewFrameTexture), and configure the output width and height as the computed
+                // display size.
+                converter.setSurfaceTextureAndAttachToGLContext(
+                    previewFrameTexture,
+                    isCameraRotated ? displaySize.getHeight() : displaySize.getWidth(),
+                    isCameraRotated ? displaySize.getWidth() : displaySize.getHeight());
+              }
+
+              @Override
+              public void surfaceDestroyed(SurfaceHolder holder) {
+                processor.getVideoSurfaceOutput().setSurface(null);
+              }
+            });
   }
 
   private void prepareDemoAssets() {
