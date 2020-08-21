@@ -71,13 +71,6 @@ import java.util.Map;
  */
 public class MainActivity extends com.google.mediapipe.apps.basic.MainActivity {
   private static final String TAG = "MainActivity";
-  private static final boolean FLIP_FRAMES_VERTICALLY = true;
-
-  private SurfaceTexture previewFrameTexture;
-  private SurfaceView previewDisplayView;
-  private EglManager eglManager;
-  private ExternalTextureConverter converter;
-  private ApplicationInfo applicationInfo;
 
   // Allows for automated packet transmission to graph
   private MediaPipePacketManager mediaPipePacketManager;
@@ -137,9 +130,7 @@ public class MainActivity extends com.google.mediapipe.apps.basic.MainActivity {
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
-
     super.onCreate(savedInstanceState);
-    setContentView(R.layout.imt_activity_main);
 
     editText = findViewById(R.id.gif_edit_text);
     editText.setGIFCommitListener(
@@ -158,31 +149,6 @@ public class MainActivity extends com.google.mediapipe.apps.basic.MainActivity {
             closeKeyboard();
           }
         });
-
-    try {
-      applicationInfo =
-          getPackageManager().getApplicationInfo(
-          getPackageName(),PackageManager.GET_META_DATA);
-    } catch (NameNotFoundException e) {
-      Log.e(TAG, "Cannot find application info: " + e);
-    }
-
-    previewDisplayView = new SurfaceView(this);
-    setupPreviewDisplayView();
-
-    // Initialize asset manager so that MediaPipe native libraries can access
-    // the app assets, e.g. binary graphs.
-    AndroidAssetUtil.initializeNativeAssetManager(this);
-    eglManager = new EglManager(null);
-    processor =
-        new FrameProcessor(
-            this,
-            eglManager.getNativeContext(),
-            applicationInfo.metaData.getString("binaryGraphName"),
-            applicationInfo.metaData.getString("inputVideoStreamName"),
-            applicationInfo.metaData.getString("outputVideoStreamName"));
-    processor.getVideoSurfaceOutput().setFlipY(FLIP_FRAMES_VERTICALLY);
-    PermissionHelper.checkAndRequestCameraPermissions(this);
 
     // Send loaded 3d render assets as side packets to graph
     prepareDemoAssets();
@@ -248,6 +214,12 @@ public class MainActivity extends com.google.mediapipe.apps.basic.MainActivity {
           }
         });
     refreshUi();
+  }
+
+  // Use our custom activity_main layout for InstantMotionTracking
+  @Override
+  protected int setContentViewLayoutResId() {
+    return R.layout.imt_activity_main;
   }
 
   // Manages a touch event in order to perform placement/rotation/scaling gestures
@@ -514,66 +486,6 @@ public class MainActivity extends com.google.mediapipe.apps.basic.MainActivity {
       InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
       imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
-  }
-
-  protected void onResume() {
-    super.onResume();
-    converter = new ExternalTextureConverter(eglManager.getContext());
-    converter.setFlipY(FLIP_FRAMES_VERTICALLY);
-    converter.setConsumer(processor);
-    if (PermissionHelper.cameraPermissionsGranted(this)) {
-      startCamera();
-    }
-  }
-
-  @Override
-  protected void onPause() {
-    super.onPause();
-    converter.close();
-  }
-
-  protected void onCameraStarted(SurfaceTexture surfaceTexture) {
-    previewFrameTexture = surfaceTexture;
-    previewDisplayView.setVisibility(View.VISIBLE);
-  }
-
-  private void setupPreviewDisplayView() {
-    previewDisplayView.setVisibility(View.GONE);
-    ViewGroup viewGroup = findViewById(R.id.preview_display_layout);
-    viewGroup.addView(previewDisplayView);
-
-    previewDisplayView
-        .getHolder()
-        .addCallback(
-            new SurfaceHolder.Callback() {
-              @Override
-              public void surfaceCreated(SurfaceHolder holder) {
-                processor.getVideoSurfaceOutput().setSurface(holder.getSurface());
-              }
-
-              @Override
-              public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-                // (Re-)Compute the ideal size of the camera-preview display (the area that the
-                // camera-preview frames get rendered onto, potentially with scaling and rotation)
-                // based on the size of the SurfaceView that contains the display.
-                Size viewSize = new Size(width, height);
-                Size displaySize = cameraHelper.computeDisplaySizeFromViewSize(viewSize);
-                boolean isCameraRotated = cameraHelper.isCameraRotated();
-
-                // Connect the converter to the camera-preview frames as its input (via
-                // previewFrameTexture), and configure the output width and height as the computed
-                // display size.
-                converter.setSurfaceTextureAndAttachToGLContext(
-                    previewFrameTexture,
-                    isCameraRotated ? displaySize.getHeight() : displaySize.getWidth(),
-                    isCameraRotated ? displaySize.getWidth() : displaySize.getHeight());
-              }
-
-              @Override
-              public void surfaceDestroyed(SurfaceHolder holder) {
-                processor.getVideoSurfaceOutput().setSurface(null);
-              }
-            });
   }
 
   private void prepareDemoAssets() {
