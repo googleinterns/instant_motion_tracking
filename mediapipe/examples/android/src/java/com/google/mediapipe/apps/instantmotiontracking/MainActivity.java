@@ -447,6 +447,7 @@ public class MainActivity extends AppCompatActivity {
   private void setControlButtonDesign(ImageButton btn, int imageDrawable) {
     btn.setImageDrawable(getResources().getDrawable(imageDrawable));
     btn.setBackgroundColor(Color.parseColor("#00ffffff"));
+    btn.setColorFilter(Color.parseColor("#0494a4"));
     btn.setLayoutParams(new LinearLayout.LayoutParams(200, 200));
     btn.setPadding(25, 25, 25, 25);
     btn.setScaleType(ImageView.ScaleType.FIT_XY);
