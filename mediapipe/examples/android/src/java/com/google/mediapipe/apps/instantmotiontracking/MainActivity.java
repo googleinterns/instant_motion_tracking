@@ -424,7 +424,9 @@ public class MainActivity extends AppCompatActivity {
       addSticker.setOnClickListener(
           new View.OnClickListener() {
             public void onClick(View v) {
-              stickerArrayList.add(new Sticker());
+              Sticker tmpSticker = new Sticker();
+              stickerArrayList.add(tmpSticker);
+              currentSticker = tmpSticker;
               refreshUi();
             }
           });
