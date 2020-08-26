@@ -48,9 +48,9 @@ android_binary(
     assets = [
         "//mediapipe/graphs/instantmotiontracking:mobile.binarypb",
         "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/gif:gif.obj.uuu",
-        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/gif:default_gif_texture.bmp",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/gif:default_gif_texture.jpg",
         "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/robot:robot.obj.uuu",
-        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/robot:robot_texture.bmp",
+        "//mediapipe/examples/android/src/java/com/google/mediapipe/apps/instantmotiontracking/assets/robot:robot_texture.jpg",
     ],
     assets_dir = "",
     manifest = "AndroidManifest.xml",

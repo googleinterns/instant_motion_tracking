@@ -129,7 +129,7 @@ public class MainActivity extends AppCompatActivity {
   // TODO: Grouping all tags and assets into a seperate structure
   // TODO: bitmaps are space heavy, try to use compressed like png/webp
   private Bitmap asset3dTexture = null;
-  private final String ASSET_3D_TEXTURE = "robot_texture.bmp";
+  private final String ASSET_3D_TEXTURE = "robot_texture.jpg";
   private final String ASSET_3D_FILE = "robot.obj.uuu";
   private final String ASSET_3D_TEXTURE_TAG = "texture_3d";
   private final String ASSET_3D_TAG = "asset_3d";
@@ -143,7 +143,7 @@ public class MainActivity extends AppCompatActivity {
   private Bitmap defaultGIFTexture = null; // Texture sent if no gif available
   private final String GIF_ASPECT_RATIO_TAG = "gif_aspect_ratio";
   private float gifAspectRatio = 1.0f; // GIF width:height
-  private final String DEFAULT_GIF_TEXTURE = "default_gif_texture.bmp";
+  private final String DEFAULT_GIF_TEXTURE = "default_gif_texture.jpg";
   private final String GIF_FILE = "gif.obj.uuu";
   private final String GIF_TEXTURE_TAG = "gif_texture";
   private final String GIF_ASSET_TAG = "gif_asset_name";

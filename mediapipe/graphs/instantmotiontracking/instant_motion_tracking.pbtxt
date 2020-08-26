@@ -52,7 +52,7 @@ node {
   input_stream: "USER_ROTATIONS:user_rotation_data"
   input_stream: "USER_SCALINGS:user_scaling_data"
   input_stream: "RENDER_DATA:sticker_render_data"
-  input_stream: "GIF_RATIO:gif_aspect_ratio"
+  input_stream: "GIF_ASPECT_RATIO:gif_aspect_ratio"
   output_stream: "MATRICES:0:gif_matrices"
   output_stream: "MATRICES:1:asset_3d_matrices"
   input_side_packet: "FOV:vertical_fov_radians"

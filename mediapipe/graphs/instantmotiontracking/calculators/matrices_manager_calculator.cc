@@ -39,7 +39,7 @@ namespace {
   constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
   constexpr char kUserScalingsTag[] = "USER_SCALINGS";
   constexpr char kRendersTag[] = "RENDER_DATA";
-  constexpr char kGifAspectRatioTag[] = "GIF_RATIO";
+  constexpr char kGifAspectRatioTag[] = "GIF_ASPECT_RATIO";
   constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
   constexpr char kFOVSidePacketTag[] = "FOV";
   constexpr char kAspectRatioSidePacketTag[] = "ASPECT_RATIO";
@@ -66,7 +66,7 @@ namespace {
 //  IMU_ROTATION - float[9] of row-major device rotation matrix [REQUIRED]
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
-//  GIF_RATIO - Aspect ratio of GIF image used to dynamically scale GIF asset
+//  GIF_ASPECT_RATIO - Aspect ratio of GIF image used to dynamically scale GIF asset
 //  [REQUIRED]
 // Output:
 //  MATRICES - TimedModelMatrixProtoList of each object type to render [REQUIRED]
@@ -78,7 +78,7 @@ namespace {
 //  input_stream: "IMU_ROTATION:imu_rotation_matrix"
 //  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "USER_SCALINGS:user_scaling_data"
-//  input_stream: "GIF_RATIO:gif_aspect_ratio"
+//  input_stream: "GIF_ASPECT_RATIO:gif_aspect_ratio"
 //  output_stream: "MATRICES:0:first_render_matrices"
 //  output_stream: "MATRICES:1:second_render_matrices" [unbounded input size]
 //  input_side_packet: "FOV:vertical_fov_radians"
@@ -133,7 +133,7 @@ class MatricesManagerCalculator : public CalculatorBase {
         }
         // GIF if wider vertically (scale on y-axis)
         else {
-          y_scalar = 1.0f/gif_aspect_ratio;
+          y_scalar = 1.0f / gif_aspect_ratio;
         }
       }
       else if (render_id == 1) { // Asset 1
