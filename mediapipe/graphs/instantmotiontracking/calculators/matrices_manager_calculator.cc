@@ -119,18 +119,31 @@ class MatricesManagerCalculator : public CalculatorBase {
     // the specified render id in order to ensure all objects render at a similar
     // size in the view screen upon initial placement
     const DiagonalMatrix3f GetDefaultRenderScaleDiagonal(const int render_id, const float user_scale_factor, const float gif_aspect_ratio) {
+      float combined_scale = 1.0f;
+      float x_scalar = 1.0f;
+      float y_scalar = 1.0f;
+
       if (render_id == 0) { // GIF
-        const float scaling_preset = 160.0f;
-        const float combined_scale = scaling_preset * user_scale_factor;
-        DiagonalMatrix3f scaling(combined_scale * gif_aspect_ratio, combined_scale, combined_scale);
-        return scaling;
+        // 160 is the scaling preset to make the GIF asset appear relatively
+        // similar in size to all other assets
+        combined_scale = 160.0f * user_scale_factor;
+        // GIF if wider horizontally (scale on x-axis)
+        if (gif_aspect_ratio >= 1.0f) {
+          x_scalar = gif_aspect_ratio;
+        }
+        // GIF if wider vertically (scale on y-axis)
+        else {
+          y_scalar = 1.0f/gif_aspect_ratio;
+        }
       }
       else if (render_id == 1) { // Asset 1
-        const float scaling_preset = 5.0f;
-        const float combined_scale = scaling_preset * user_scale_factor;
-        DiagonalMatrix3f scaling(combined_scale, combined_scale, combined_scale);
-        return scaling;
+        // 5 is the scaling preset to make the 3D asset appear relatively
+        // similar in size to all other assets
+        combined_scale = 5.0f * user_scale_factor;
       }
+      DiagonalMatrix3f scaling(combined_scale * x_scalar,
+          combined_scale * y_scalar, combined_scale);
+      return scaling;
     }
 };
 

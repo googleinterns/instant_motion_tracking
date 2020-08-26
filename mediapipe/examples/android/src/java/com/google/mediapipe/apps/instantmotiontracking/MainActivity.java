@@ -654,7 +654,7 @@ public class MainActivity extends AppCompatActivity {
       updateGIFFrame();
 
       // Calculate and set the aspect ratio of the GIF
-      gifAspectRatio = currentGIFBitmap.getWidth() / currentGIFBitmap.getHeight();
+      gifAspectRatio = (float)currentGIFBitmap.getWidth() / (float)currentGIFBitmap.getHeight();
 
       Packet stickerSentinelPacket = processor.getPacketCreator().createInt32(stickerSentinel);
       // Sticker sentinel value must be reset for next graph iteration
