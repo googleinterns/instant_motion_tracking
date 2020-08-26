@@ -39,6 +39,7 @@ namespace {
   constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
   constexpr char kUserScalingsTag[] = "USER_SCALINGS";
   constexpr char kRendersTag[] = "RENDER_DATA";
+  constexpr char kGifAspectRatioTag[] = "GIF_RATIO";
   constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
   constexpr char kFOVSidePacketTag[] = "FOV";
   constexpr char kAspectRatioSidePacketTag[] = "ASPECT_RATIO";
@@ -65,6 +66,8 @@ namespace {
 //  IMU_ROTATION - float[9] of row-major device rotation matrix [REQUIRED]
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
+//  GIF_RATIO - Aspect ratio of GIF image used to dynamically scale GIF asset
+//  [REQUIRED]
 // Output:
 //  MATRICES - TimedModelMatrixProtoList of each object type to render [REQUIRED]
 //
@@ -75,6 +78,7 @@ namespace {
 //  input_stream: "IMU_ROTATION:imu_rotation_matrix"
 //  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "USER_SCALINGS:user_scaling_data"
+//  input_stream: "GIF_RATIO:gif_aspect_ratio"
 //  output_stream: "MATRICES:0:first_render_matrices"
 //  output_stream: "MATRICES:1:second_render_matrices" [unbounded input size]
 //  input_side_packet: "FOV:vertical_fov_radians"
@@ -114,12 +118,18 @@ class MatricesManagerCalculator : public CalculatorBase {
     // This returns a scale factor by which to alter the projection matrix for
     // the specified render id in order to ensure all objects render at a similar
     // size in the view screen upon initial placement
-    const float GetDefaultRenderScale(const int render_id) {
+    const DiagonalMatrix3f GetDefaultRenderScaleDiagonal(const int render_id, const float user_scale_factor, const float gif_aspect_ratio) {
       if (render_id == 0) { // GIF
-        return 160.0f;
+        const float scaling_preset = 160.0f;
+        const float combined_scale = scaling_preset * user_scale_factor;
+        DiagonalMatrix3f scaling(combined_scale * gif_aspect_ratio, combined_scale, combined_scale);
+        return scaling;
       }
       else if (render_id == 1) { // Asset 1
-        return 5.0f;
+        const float scaling_preset = 5.0f;
+        const float combined_scale = scaling_preset * user_scale_factor;
+        DiagonalMatrix3f scaling(combined_scale, combined_scale, combined_scale);
+        return scaling;
       }
     }
 };
@@ -132,6 +142,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     && cc->Inputs().HasTag(kIMUMatrixTag)
     && cc->Inputs().HasTag(kUserRotationsTag)
     && cc->Inputs().HasTag(kUserScalingsTag)
+    && cc->Inputs().HasTag(kGifAspectRatioTag)
     && cc->InputSidePackets().HasTag(kFOVSidePacketTag)
     && cc->InputSidePackets().HasTag(kAspectRatioSidePacketTag));
 
@@ -140,6 +151,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
   cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
   cc->Inputs().Tag(kRendersTag).Set<std::vector<int>>();
+  cc->Inputs().Tag(kGifAspectRatioTag).Set<float>();
   for (CollectionItemId id = cc->Outputs().BeginId("MATRICES");
          id < cc->Outputs().EndId("MATRICES"); ++id) {
            cc->Outputs().Get(id).Set<TimedModelMatrixProtoList>();
@@ -180,6 +192,9 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
           .Tag(kAnchorsTag)
           .Get<std::vector<Anchor>>();
 
+  const float gif_aspect_ratio =
+      cc->Inputs().Tag(kGifAspectRatioTag).Get<float>();
+
   // Device IMU rotation submatrix
   const auto imu_matrix = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>();
   Matrix3f imu_rotation_submatrix;
@@ -211,15 +226,13 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     // The user transformation data associated with this sticker must be defined
     const float user_rotation_radians = GetUserRotation(user_rotation_data, id);
     const float user_scale_factor = GetUserScaler(user_scaling_data, id);
-    // We can also get the initial scaling factor based on the preset factor for this render id
-    const float render_scale_factor = GetDefaultRenderScale(render_data[render_idx++]);
-    // The final scaling factor (combined user and render preset) can be generated
-    const float scale_factor = user_scale_factor * render_scale_factor;
 
     // A vector representative of a user's sticker rotation transformation can be created
     const Matrix3f user_rotation_submatrix = GenerateUserRotationMatrix(user_rotation_radians);
     // Next, the diagonal representative of the combined scaling data
-    const DiagonalMatrix3f scaling_diagonal = GenerateScalingMatrix(scale_factor);
+    DiagonalMatrix3f scaling_diagonal = GetDefaultRenderScaleDiagonal(render_data[render_idx++], user_scale_factor, gif_aspect_ratio);
+
+    render_idx++;
 
     // The user transformation data can be concatenated into a final rotation submatrix with the
     // device IMU rotational data

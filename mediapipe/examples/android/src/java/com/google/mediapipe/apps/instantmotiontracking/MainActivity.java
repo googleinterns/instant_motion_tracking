@@ -141,6 +141,8 @@ public class MainActivity extends AppCompatActivity {
   // last time the GIF was updated
   private long gifLastFrameUpdateMS = System.currentTimeMillis();
   private Bitmap defaultGIFTexture = null; // Texture sent if no gif available
+  private final String GIF_ASPECT_RATIO_TAG = "gif_aspect_ratio";
+  private float gifAspectRatio = 1.0f; // GIF width:height
   private final String DEFAULT_GIF_TEXTURE = "default_gif_texture.bmp";
   private final String GIF_FILE = "gif.obj.uuu";
   private final String GIF_TEXTURE_TAG = "gif_texture";
@@ -651,6 +653,9 @@ public class MainActivity extends AppCompatActivity {
       // Update to next GIF frame based on timing and frame rate
       updateGIFFrame();
 
+      // Calculate and set the aspect ratio of the GIF
+      gifAspectRatio = currentGIFBitmap.getWidth() / currentGIFBitmap.getHeight();
+
       Packet stickerSentinelPacket = processor.getPacketCreator().createInt32(stickerSentinel);
       // Sticker sentinel value must be reset for next graph iteration
       stickerSentinel = -1;
@@ -663,6 +668,7 @@ public class MainActivity extends AppCompatActivity {
       Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(rotationMatrix);
       // Communicate GIF textures (dynamic texturing) to graph
       Packet gifTexturePacket = processor.getPacketCreator().createRgbaImageFrame(currentGIFBitmap);
+      Packet gifAspectRatioPacket = processor.getPacketCreator().createFloat32(gifAspectRatio);
       processor
           .getGraph()
           .addConsumablePacketToInputStream(STICKER_SENTINEL_TAG, stickerSentinelPacket, timestamp);
@@ -675,10 +681,14 @@ public class MainActivity extends AppCompatActivity {
       processor
           .getGraph()
           .addConsumablePacketToInputStream(GIF_TEXTURE_TAG, gifTexturePacket, timestamp);
+      processor
+          .getGraph()
+          .addConsumablePacketToInputStream(GIF_ASPECT_RATIO_TAG, gifAspectRatioPacket, timestamp);
       stickerSentinelPacket.release();
       stickerProtoDataPacket.release();
       imuDataPacket.release();
       gifTexturePacket.release();
+      gifAspectRatioPacket.release();
     }
   }
 }
