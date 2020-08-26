@@ -48,6 +48,8 @@ namespace {
   // Device properties that will be preset by side packets
   float vertical_fov_radians_ = 0.0f;
   float aspect_ratio_ = 0.0f;
+  // True is GIF aspect ratio input exists
+  bool gif_aspect_ratio_exists = false;
 }
 
 // Intermediary for rotation and translation data to model matrix usable by
@@ -67,7 +69,7 @@ namespace {
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
 //  GIF_ASPECT_RATIO - Aspect ratio of GIF image used to dynamically scale GIF asset
-//  defined as width / height [REQUIRED]
+//  defined as width / height [OPTIONAL]
 // Output:
 //  MATRICES - TimedModelMatrixProtoList of each object type to render [REQUIRED]
 //
@@ -119,30 +121,31 @@ class MatricesManagerCalculator : public CalculatorBase {
     // the specified render id in order to ensure all objects render at a similar
     // size in the view screen upon initial placement
     const DiagonalMatrix3f GetDefaultRenderScaleDiagonal(const int render_id, const float user_scale_factor, const float gif_aspect_ratio) {
-      float combined_scale = 1.0f;
+      float scale_preset = 1.0f;
       float x_scalar = 1.0f;
       float y_scalar = 1.0f;
 
       if (render_id == 0) { // GIF
         // 160 is the scaling preset to make the GIF asset appear relatively
         // similar in size to all other assets
-        combined_scale = 160.0f * user_scale_factor;
-        // GIF if wider horizontally (scale on x-axis)
+        scale_preset = 160.0f;
         if (gif_aspect_ratio >= 1.0f) {
+          // GIF is wider horizontally (scale on x-axis)
           x_scalar = gif_aspect_ratio;
         }
-        // GIF if wider vertically (scale on y-axis)
         else {
+          // GIF is wider vertically (scale on y-axis)
           y_scalar = 1.0f / gif_aspect_ratio;
         }
       }
       else if (render_id == 1) { // Asset 1
         // 5 is the scaling preset to make the 3D asset appear relatively
         // similar in size to all other assets
-        combined_scale = 5.0f * user_scale_factor;
+        scale_preset = 5.0f;
       }
-      DiagonalMatrix3f scaling(combined_scale * x_scalar,
-          combined_scale * y_scalar, combined_scale);
+      DiagonalMatrix3f scaling(scale_preset * user_scale_factor * x_scalar,
+        scale_preset * user_scale_factor * y_scalar,
+        scale_preset * user_scale_factor);
       return scaling;
     }
 };
@@ -155,7 +158,6 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     && cc->Inputs().HasTag(kIMUMatrixTag)
     && cc->Inputs().HasTag(kUserRotationsTag)
     && cc->Inputs().HasTag(kUserScalingsTag)
-    && cc->Inputs().HasTag(kGifAspectRatioTag)
     && cc->InputSidePackets().HasTag(kFOVSidePacketTag)
     && cc->InputSidePackets().HasTag(kAspectRatioSidePacketTag));
 
@@ -164,7 +166,13 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
   cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
   cc->Inputs().Tag(kRendersTag).Set<std::vector<int>>();
-  cc->Inputs().Tag(kGifAspectRatioTag).Set<float>();
+
+  // Check for optional Gif aspect ratio input stream
+  gif_aspect_ratio_exists = cc->Inputs().HasTag(kGifAspectRatioTag);
+  if (gif_aspect_ratio_exists) {
+    cc->Inputs().Tag(kGifAspectRatioTag).Set<float>();
+  }
+
   for (CollectionItemId id = cc->Outputs().BeginId("MATRICES");
          id < cc->Outputs().EndId("MATRICES"); ++id) {
            cc->Outputs().Get(id).Set<TimedModelMatrixProtoList>();
@@ -205,8 +213,9 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
           .Tag(kAnchorsTag)
           .Get<std::vector<Anchor>>();
 
-  const float gif_aspect_ratio =
-      cc->Inputs().Tag(kGifAspectRatioTag).Get<float>();
+  // If no ratio provided, Gif ratio will default to standard GIF.obj size
+  const float gif_aspect_ratio = (gif_aspect_ratio_exists) ?
+    cc->Inputs().Tag(kGifAspectRatioTag).Get<float>() : 1.0f;
 
   // Device IMU rotation submatrix
   const auto imu_matrix = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>();
@@ -243,8 +252,8 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
     // A vector representative of a user's sticker rotation transformation can be created
     const Matrix3f user_rotation_submatrix = GenerateUserRotationMatrix(user_rotation_radians);
     // Next, the diagonal representative of the combined scaling data
-    DiagonalMatrix3f scaling_diagonal = GetDefaultRenderScaleDiagonal(render_data[render_idx++], user_scale_factor, gif_aspect_ratio);
-
+    DiagonalMatrix3f scaling_diagonal = GetDefaultRenderScaleDiagonal(render_data[render_idx], user_scale_factor, gif_aspect_ratio);
+    // Increment to next render id from vector
     render_idx++;
 
     // The user transformation data can be concatenated into a final rotation submatrix with the
