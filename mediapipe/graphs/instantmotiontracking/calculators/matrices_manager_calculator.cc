@@ -67,7 +67,7 @@ namespace {
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
 //  GIF_ASPECT_RATIO - Aspect ratio of GIF image used to dynamically scale GIF asset
-//  [REQUIRED]
+//  defined as width / height [REQUIRED]
 // Output:
 //  MATRICES - TimedModelMatrixProtoList of each object type to render [REQUIRED]
 //
