@@ -126,25 +126,26 @@ public class MainActivity extends AppCompatActivity {
   private final String STICKER_PROTO_TAG = "sticker_proto_string";
   // Assets for object rendering
   // All animation assets and tags for the first asset (1)
-  // TODO: Grouping all tags and assets into a seperate structure
-  // TODO: bitmaps are space heavy, try to use compressed like png/webp
-  private Bitmap asset3dTexture = null;
-  private final String ASSET_3D_TEXTURE = "robot_texture.bmp";
+  // TODO: bitmaps are space heavy, try to use GpuBuffer directly with MediaPipe
+  private final String ASSET_3D_TEXTURE = "robot_texture.jpg";
   private final String ASSET_3D_FILE = "robot.obj.uuu";
   private final String ASSET_3D_TEXTURE_TAG = "texture_3d";
   private final String ASSET_3D_TAG = "asset_3d";
+  private Bitmap asset3dTexture = null;
   // All GIF animation assets and tags
-  private GIFEditText editText;
-  private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
-  private int gifCurrentIndex = 0;
   private final int GIF_FRAME_RATE = 20; // 20 FPS
-  // last time the GIF was updated
-  private long gifLastFrameUpdateMS = System.currentTimeMillis();
-  private Bitmap defaultGIFTexture = null; // Texture sent if no gif available
-  private final String DEFAULT_GIF_TEXTURE = "default_gif_texture.bmp";
+  private final String GIF_ASPECT_RATIO_TAG = "gif_aspect_ratio";
+  private final String DEFAULT_GIF_TEXTURE = "default_gif_texture.jpg";
   private final String GIF_FILE = "gif.obj.uuu";
   private final String GIF_TEXTURE_TAG = "gif_texture";
   private final String GIF_ASSET_TAG = "gif_asset_name";
+  private GIFEditText editText;
+  private ArrayList<Bitmap> GIFBitmaps = new ArrayList<Bitmap>();
+  private int gifCurrentIndex = 0;
+  private long gifLastFrameUpdateMS = System.currentTimeMillis();
+  private Bitmap defaultGIFTexture = null; // Texture sent if no gif available
+  private float gifAspectRatio = 1.0f; // GIF width:height
+
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -651,6 +652,9 @@ public class MainActivity extends AppCompatActivity {
       // Update to next GIF frame based on timing and frame rate
       updateGIFFrame();
 
+      // Calculate and set the aspect ratio of the GIF
+      gifAspectRatio = (float)currentGIFBitmap.getWidth() / (float)currentGIFBitmap.getHeight();
+
       Packet stickerSentinelPacket = processor.getPacketCreator().createInt32(stickerSentinel);
       // Sticker sentinel value must be reset for next graph iteration
       stickerSentinel = -1;
@@ -663,6 +667,7 @@ public class MainActivity extends AppCompatActivity {
       Packet imuDataPacket = processor.getPacketCreator().createFloat32Array(rotationMatrix);
       // Communicate GIF textures (dynamic texturing) to graph
       Packet gifTexturePacket = processor.getPacketCreator().createRgbaImageFrame(currentGIFBitmap);
+      Packet gifAspectRatioPacket = processor.getPacketCreator().createFloat32(gifAspectRatio);
       processor
           .getGraph()
           .addConsumablePacketToInputStream(STICKER_SENTINEL_TAG, stickerSentinelPacket, timestamp);
@@ -675,10 +680,14 @@ public class MainActivity extends AppCompatActivity {
       processor
           .getGraph()
           .addConsumablePacketToInputStream(GIF_TEXTURE_TAG, gifTexturePacket, timestamp);
+      processor
+          .getGraph()
+          .addConsumablePacketToInputStream(GIF_ASPECT_RATIO_TAG, gifAspectRatioPacket, timestamp);
       stickerSentinelPacket.release();
       stickerProtoDataPacket.release();
       imuDataPacket.release();
       gifTexturePacket.release();
+      gifAspectRatioPacket.release();
     }
   }
 }
