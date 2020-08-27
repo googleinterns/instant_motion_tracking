@@ -39,24 +39,24 @@ node {
   calculator: "RegionTrackingSubgraph"
   input_stream: "VIDEO:input_video"
   input_stream: "SENTINEL:sticker_sentinel"
+  input_stream: "IMU_ROTATION:imu_rotation_matrix"
   input_stream: "ANCHORS:initial_anchor_data"
-  output_stream: "ANCHORS:tracked_anchor_data"
+  output_stream: "MATRICES:model_matrices"
+  input_side_packet: "FOV:vertical_fov_radians"
+  input_side_packet: "ASPECT_RATIO:aspect_ratio"
 }
 
 # Concatenates all transformations to generate model matrices for the OpenGL
 # animation overlay calculator.
 node {
   calculator: "MatricesManagerCalculator"
-  input_stream: "ANCHORS:tracked_anchor_data"
-  input_stream: "IMU_ROTATION:imu_rotation_matrix"
+  input_stream: "MATRICES:model_matrices"
   input_stream: "USER_ROTATIONS:user_rotation_data"
   input_stream: "USER_SCALINGS:user_scaling_data"
   input_stream: "RENDER_DATA:sticker_render_data"
   input_stream: "GIF_ASPECT_RATIO:gif_aspect_ratio"
   output_stream: "MATRICES:0:gif_matrices"
   output_stream: "MATRICES:1:asset_3d_matrices"
-  input_side_packet: "FOV:vertical_fov_radians"
-  input_side_packet: "ASPECT_RATIO:aspect_ratio"
 }
 
 # Renders the final 3d stickers and overlays them on input image.

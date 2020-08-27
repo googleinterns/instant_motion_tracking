@@ -12,18 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Radians by which to rotate the object (Provided by UI input)
-typedef struct UserRotation {
-   float rotation_radians;
-   int sticker_id;
-};
-
-// Scaling factor provided by the UI application end
-typedef struct UserScaling {
-   float scale_factor;
-   int sticker_id;
-};
-
 // The normalized anchor coordinates of a sticker
 typedef struct Anchor {
    float x; // [0.0-1.0]
