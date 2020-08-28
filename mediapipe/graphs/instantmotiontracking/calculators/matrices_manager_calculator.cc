@@ -34,20 +34,12 @@ namespace {
   using Vector3f = Eigen::Vector3f;
   using Matrix3f = Eigen::Matrix3f;
   using DiagonalMatrix3f = Eigen::DiagonalMatrix<float, 3>;
-  constexpr char kAnchorsTag[] = "ANCHORS";
-  constexpr char kIMUMatrixTag[] = "IMU_ROTATION";
+  constexpr char kMatricesTag[] = "MATRICES";
   constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
   constexpr char kUserScalingsTag[] = "USER_SCALINGS";
   constexpr char kRendersTag[] = "RENDER_DATA";
   constexpr char kGifAspectRatioTag[] = "GIF_ASPECT_RATIO";
   constexpr char kModelMatricesTag[] = "MODEL_MATRICES";
-  constexpr char kFOVSidePacketTag[] = "FOV";
-  constexpr char kAspectRatioSidePacketTag[] = "ASPECT_RATIO";
-  // initial Z value (-10 is center point in visual range for OpenGL render)
-  constexpr float kInitialZ = -10.0f;
-  // Device properties that will be preset by side packets
-  float vertical_fov_radians_ = 0.0f;
-  float aspect_ratio_ = 0.0f;
   // True is GIF aspect ratio input exists
   bool gif_aspect_ratio_exists = false;
 }
@@ -57,15 +49,11 @@ namespace {
 // objects and transformations (including a breakdown of model matrices), please
 // visit: https://open.gl/transformations
 //
-// Input Side Packets:
-//  FOV - Vertical field of view for device [REQUIRED - Defines perspective matrix]
-//  ASPECT_RATIO - Aspect ratio of device [REQUIRED - Defines perspective matrix]
 //
 // Input:
 //  ANCHORS - Anchor data with x,y,z coordinates (x,y are in [0.0-1.0] range for
 //    position on the device screen, while z is the scaling factor that changes
 //    in proportion to the distance from the tracked region) [REQUIRED]
-//  IMU_ROTATION - float[9] of row-major device rotation matrix [REQUIRED]
 //  USER_ROTATIONS - UserRotations with corresponding radians of rotation [REQUIRED]
 //  USER_SCALINGS - UserScalings with corresponding scale factor [REQUIRED]
 //  GIF_ASPECT_RATIO - Aspect ratio of GIF image used to dynamically scale GIF asset
@@ -77,14 +65,11 @@ namespace {
 // node{
 //  calculator: "MatricesManagerCalculator"
 //  input_stream: "ANCHORS:tracked_scaled_anchor_data"
-//  input_stream: "IMU_ROTATION:imu_rotation_matrix"
 //  input_stream: "USER_ROTATIONS:user_rotation_data"
 //  input_stream: "USER_SCALINGS:user_scaling_data"
 //  input_stream: "GIF_ASPECT_RATIO:gif_aspect_ratio"
 //  output_stream: "MATRICES:0:first_render_matrices"
 //  output_stream: "MATRICES:1:second_render_matrices" [unbounded input size]
-//  input_side_packet: "FOV:vertical_fov_radians"
-//  input_side_packet: "ASPECT_RATIO:aspect_ratio"
 // }
 
 class MatricesManagerCalculator : public CalculatorBase {
@@ -94,28 +79,7 @@ class MatricesManagerCalculator : public CalculatorBase {
     ::mediapipe::Status Process(CalculatorContext* cc) override;
   private:
     const DiagonalMatrix3f GenerateScalingMatrix(const float scale_factor);
-    const Matrix3f GenerateUserRotationMatrix(const float rotation_radians);
-    const Matrix4fCM GenerateEigenModelMatrix(const Vector3f translation_vector,
-      const Matrix3f rotation_submatrix);
-    const Vector3f GenerateAnchorVector(const Anchor tracked_anchor);
-
-    // Returns a user scaling increment associated with the sticker_id
-    // TODO: Adjust lookup function if total number of stickers is uncapped to improve performance
-    const float GetUserScaler(const std::vector<UserScaling> scalings, const int sticker_id) {
-      for (const UserScaling &user_scaling : scalings) {
-        if (user_scaling.sticker_id == sticker_id) {
-          return user_scaling.scale_factor;
-        }
-      }
-    }
-    // Returns a user rotation in radians associated with the sticker_id
-    const float GetUserRotation(const std::vector<UserRotation> rotations, const int sticker_id) {
-      for (const UserRotation &rotation : rotations) {
-        if (rotation.sticker_id == sticker_id) {
-          return rotation.rotation_radians;
-        }
-      }
-    }
+    const Matrix3f GenerateRotationTransformationMatrix(const float rotation_radians);
 
     // This returns a scale factor by which to alter the projection matrix for
     // the specified render id in order to ensure all objects render at a similar
@@ -154,17 +118,13 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
 
 ::mediapipe::Status MatricesManagerCalculator::GetContract(
     CalculatorContract* cc) {
-  RET_CHECK(cc->Inputs().HasTag(kAnchorsTag)
-    && cc->Inputs().HasTag(kIMUMatrixTag)
+  RET_CHECK(cc->Inputs().HasTag(kMatricesTag)
     && cc->Inputs().HasTag(kUserRotationsTag)
-    && cc->Inputs().HasTag(kUserScalingsTag)
-    && cc->InputSidePackets().HasTag(kFOVSidePacketTag)
-    && cc->InputSidePackets().HasTag(kAspectRatioSidePacketTag));
+    && cc->Inputs().HasTag(kUserScalingsTag));
 
-  cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-  cc->Inputs().Tag(kIMUMatrixTag).Set<float[]>();
-  cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
-  cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
+  cc->Inputs().Tag(kMatricesTag).Set<std::vector<Matrix4fCM>>();
+  cc->Inputs().Tag(kUserScalingsTag).Set<std::vector<float>>();
+  cc->Inputs().Tag(kUserRotationsTag).Set<std::vector<float>>();
   cc->Inputs().Tag(kRendersTag).Set<std::vector<int>>();
 
   // Check for optional Gif aspect ratio input stream
@@ -177,17 +137,12 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
          id < cc->Outputs().EndId("MATRICES"); ++id) {
            cc->Outputs().Get(id).Set<TimedModelMatrixProtoList>();
   }
-  cc->InputSidePackets().Tag(kFOVSidePacketTag).Set<float>();
-  cc->InputSidePackets().Tag(kAspectRatioSidePacketTag).Set<float>();
 
   return ::mediapipe::OkStatus();
 }
 
 ::mediapipe::Status MatricesManagerCalculator::Open(CalculatorContext* cc) {
   cc->SetOffset(TimestampDiff(0));
-  // Set device properties from side packets
-  vertical_fov_radians_ = cc->InputSidePackets().Tag(kFOVSidePacketTag).Get<float>();
-  aspect_ratio_ = cc->InputSidePackets().Tag(kAspectRatioSidePacketTag).Get<float>();
   return ::mediapipe::OkStatus();
 }
 
@@ -199,77 +154,51 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
   asset_matrices_gif.get()->clear_model_matrix();
   asset_matrices_1.get()->clear_model_matrix();
 
-  const std::vector<UserRotation> user_rotation_data =
-      cc->Inputs().Tag(kUserRotationsTag).Get<std::vector<UserRotation>>();
+  const std::vector<float> user_rotation_data =
+      cc->Inputs().Tag(kUserRotationsTag).Get<std::vector<float>>();
 
-  const std::vector<UserScaling> user_scaling_data =
-        cc->Inputs().Tag(kUserScalingsTag).Get<std::vector<UserScaling>>();
+  const std::vector<float> user_scaling_data =
+        cc->Inputs().Tag(kUserScalingsTag).Get<std::vector<float>>();
 
   const std::vector<int> render_data =
       cc->Inputs().Tag(kRendersTag).Get<std::vector<int>>();
 
-  const std::vector<Anchor> anchor_data =
+  std::vector<Matrix4fCM> matrix_input_data =
       cc->Inputs()
-          .Tag(kAnchorsTag)
-          .Get<std::vector<Anchor>>();
+          .Tag(kMatricesTag)
+          .Get<std::vector<Matrix4fCM>>();
 
   // If no ratio provided, Gif ratio will default to standard GIF.obj size
   const float gif_aspect_ratio = (gif_aspect_ratio_exists) ?
     cc->Inputs().Tag(kGifAspectRatioTag).Get<float>() : 1.0f;
 
-  // Device IMU rotation submatrix
-  const auto imu_matrix = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>();
-  Matrix3f imu_rotation_submatrix;
   int idx = 0;
-  for (int x = 0; x < 3; x++) {
-    for (int y = 0; y < 3; y++) {
-      // Input matrix is row-major matrix, it must be reformatted to column-major
-      // via transpose procedure
-      imu_rotation_submatrix(y, x) = imu_matrix[idx++];
-    }
-  }
-
-  int render_idx = 0;
-  for (const Anchor &anchor : anchor_data) {
-    const int id = anchor.sticker_id;
-
+  for (Matrix4fCM &input_matrix : matrix_input_data) {
     TimedModelMatrixProto* model_matrix;
-
     // Add model matrix to matrices list for defined object render ID
-    if (render_data[render_idx] == 0) { // GIF
+    if (render_data[idx] == 0) { // GIF
       model_matrix = asset_matrices_gif.get()->add_model_matrix();
     }
-    else if (render_data[render_idx] == 1) { // Asset 1
+    else if (render_data[idx] == 1) { // Asset 1
       model_matrix = asset_matrices_1.get()->add_model_matrix();
     }
+    model_matrix->set_id(idx);
 
-    model_matrix->set_id(id);
-
-    // The user transformation data associated with this sticker must be defined
-    const float user_rotation_radians = GetUserRotation(user_rotation_data, id);
-    const float user_scale_factor = GetUserScaler(user_scaling_data, id);
-
-    // A vector representative of a user's sticker rotation transformation can be created
-    const Matrix3f user_rotation_submatrix = GenerateUserRotationMatrix(user_rotation_radians);
-    // Next, the diagonal representative of the combined scaling data
-    DiagonalMatrix3f scaling_diagonal = GetDefaultRenderScaleDiagonal(render_data[render_idx], user_scale_factor, gif_aspect_ratio);
-    // Increment to next render id from vector
-    render_idx++;
-
-    // The user transformation data can be concatenated into a final rotation submatrix with the
-    // device IMU rotational data
-    const Matrix3f user_transformed_rotation_submatrix = imu_rotation_submatrix * user_rotation_submatrix * scaling_diagonal;
-
-    // A vector representative of the translation of the object in OpenGL coordinate space must be generated
-    const Vector3f translation_vector = GenerateAnchorVector(anchor);
+    const Matrix3f user_rotation_submatrix = GenerateRotationTransformationMatrix(user_rotation_data[idx]);
+    DiagonalMatrix3f scaling_diagonal = GetDefaultRenderScaleDiagonal(render_data[idx], user_scaling_data[idx], gif_aspect_ratio);
+    // The user transformation data can be concatenated into a final rotation submatrix
+    const Matrix3f user_transformation_submatrix = user_rotation_submatrix * scaling_diagonal;
 
     // Concatenate all model matrix data
-    const Matrix4fCM final_model_matrix = GenerateEigenModelMatrix(translation_vector, user_transformed_rotation_submatrix);
+    input_matrix.topLeftCorner<3, 3>() = input_matrix.topLeftCorner<3, 3>() * user_transformation_submatrix;
+
+    // Increment to next id from vector
+    idx++;
 
     // The generated model matrix must be mapped to TimedModelMatrixProto (col-wise)
-    for (int x = 0; x < final_model_matrix.rows(); ++x) {
-      for (int y = 0; y < final_model_matrix.cols(); ++y) {
-        model_matrix->add_matrix_entries(final_model_matrix(x, y));
+    for (int x = 0; x < input_matrix.rows(); ++x) {
+      for (int y = 0; y < input_matrix.cols(); ++y) {
+        model_matrix->add_matrix_entries(input_matrix(x, y));
       }
     }
   }
@@ -288,7 +217,7 @@ REGISTER_CALCULATOR(MatricesManagerCalculator);
 }
 
 // Using a specified rotation value in radians, generate a rotation matrix for use with base rotation submatrix
-const Matrix3f MatricesManagerCalculator::GenerateUserRotationMatrix(const float rotation_radians) {
+const Matrix3f MatricesManagerCalculator::GenerateRotationTransformationMatrix(const float rotation_radians) {
   Eigen::Matrix3f user_rotation_submatrix;
     user_rotation_submatrix =
         // The rotation in radians must be inverted to rotate the object
@@ -310,48 +239,4 @@ const DiagonalMatrix3f MatricesManagerCalculator::GenerateScalingMatrix(const fl
   return scaling_matrix;
 }
 
-// TODO: Investigate possible differences in warping of tracking speed across screen
-// Using the sticker anchor data, a translation vector can be generated in OpenGL coordinate space
-const Vector3f MatricesManagerCalculator::GenerateAnchorVector(const Anchor tracked_anchor) {
-  // Using an initial z-value in OpenGL space, generate a new base z-axis value to mimic scaling by distance.
-  const float z = kInitialZ * tracked_anchor.z;
-
-  // Using triangle geometry, the minimum for a y-coordinate that will appear in the view field
-  // for the given z value above can be found.
-  const float y_half_range = z * (tan(vertical_fov_radians_ * 0.5f));
-
-  // The aspect ratio of the device and y_minimum calculated above can be used to find the
-  // minimum value for x that will appear in the view field of the device screen.
-  const float x_half_range = y_half_range * aspect_ratio_;
-
-  // Given the minimum bounds of the screen in OpenGL space, the tracked anchor coordinates
-  // can be converted to OpenGL coordinate space.
-  //
-  // (i.e: X and Y will be converted from [0.0-1.0] space to [x_minimum, -x_minimum] space
-  // and [y_minimum, -y_minimum] space respectively)
-  const float x = (-2.0f * tracked_anchor.x * x_half_range) + x_half_range;
-  const float y = (-2.0f * tracked_anchor.y * y_half_range) + y_half_range;
-
-  // A translation transformation vector can be generated via Eigen
-  const Vector3f t_vector(x,y,z);
-  return t_vector;
-}
-
-// Generates a model matrix via Eigen with appropriate transformations
-const Matrix4fCM MatricesManagerCalculator::GenerateEigenModelMatrix(
-    Vector3f translation_vector, Matrix3f rotation_submatrix) {
-  // Define basic empty model matrix
-  Matrix4fCM mvp_matrix;
-
-  // Set the translation vector
-  mvp_matrix.topRightCorner<3, 1>() = translation_vector;
-
-  // Set the rotation submatrix
-  mvp_matrix.topLeftCorner<3, 3>() = rotation_submatrix;
-
-  // Set trailing 1.0 required by OpenGL to define coordinate space
-  mvp_matrix(3,3) = 1.0f;
-
-  return mvp_matrix;
-}
 }

@@ -24,6 +24,7 @@ cc_library(
     name = "tracked_anchor_manager_calculator",
     srcs = ["tracked_anchor_manager_calculator.cc"],
     deps = [
+        "@eigen_archive//:eigen",
         "//mediapipe/framework:calculator_framework",
         "//mediapipe/framework/formats:detection_cc_proto",
         "//mediapipe/framework/formats:location_data_cc_proto",

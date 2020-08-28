@@ -25,7 +25,7 @@ constexpr char kProtoDataString[] = "PROTO";
 constexpr char kAnchorsTag[] = "ANCHORS";
 constexpr char kUserRotationsTag[] = "USER_ROTATIONS";
 constexpr char kUserScalingsTag[] = "USER_SCALINGS";
-constexpr char kRenderDescriptorsTag[] = "RENDER_DATA";
+constexpr char kRendersTag[] = "RENDER_DATA";
 
 // This calculator takes in the sticker protobuffer data and parses each individual
 // sticker object into anchors, user rotations and scalings, in addition to basic
@@ -56,13 +56,13 @@ class StickerManagerCalculator : public CalculatorBase {
     RET_CHECK(cc->Outputs().HasTag(kAnchorsTag)
       && cc->Outputs().HasTag(kUserRotationsTag)
       && cc->Outputs().HasTag(kUserScalingsTag)
-      && cc->Outputs().HasTag(kRenderDescriptorsTag));
+      && cc->Outputs().HasTag(kRendersTag));
 
     cc->Inputs().Tag(kProtoDataString).Set<std::string>();
     cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
-    cc->Outputs().Tag(kUserRotationsTag).Set<std::vector<UserRotation>>();
-    cc->Outputs().Tag(kUserScalingsTag).Set<std::vector<UserScaling>>();
-    cc->Outputs().Tag(kRenderDescriptorsTag).Set<std::vector<int>>();
+    cc->Outputs().Tag(kUserRotationsTag).Set<std::vector<float>>();
+    cc->Outputs().Tag(kUserScalingsTag).Set<std::vector<float>>();
+    cc->Outputs().Tag(kRendersTag).Set<std::vector<int>>();
 
     return ::mediapipe::OkStatus();
   }
@@ -77,8 +77,8 @@ class StickerManagerCalculator : public CalculatorBase {
       cc->Inputs().Tag(kProtoDataString).Get<std::string>();
 
     std::vector<Anchor> initial_anchor_data;
-    std::vector<UserRotation> user_rotation_data;
-    std::vector<UserScaling> user_scaling_data;
+    std::vector<float> user_rotation_data;
+    std::vector<float> user_scaling_data;
     std::vector<int> render_data;
 
     instantmotiontracking::StickerRoll sticker_roll;
@@ -90,19 +90,17 @@ class StickerManagerCalculator : public CalculatorBase {
     for (int i = 0; i < sticker_roll.sticker().size(); i++) {
       // Declare empty structures for sticker data
       Anchor initial_anchor;
-      UserRotation user_rotation;
-      UserScaling user_scaling;
+      float user_rotation;
+      float user_scaling;
       // Get individual Sticker object as defined by Protobuffer
       instantmotiontracking::Sticker sticker = sticker_roll.sticker(i);
       // Set individual data structure ids to associate with this sticker
       initial_anchor.sticker_id = sticker.id();
-      user_rotation.sticker_id = sticker.id();
-      user_scaling.sticker_id = sticker.id();
       initial_anchor.x = sticker.x();
       initial_anchor.y = sticker.y();
       initial_anchor.z = 1.0f; // default to 1.0 in normalized 3d space
-      user_rotation.rotation_radians = sticker.rotation();
-      user_scaling.scale_factor = sticker.scale();
+      user_rotation = sticker.rotation();
+      user_scaling = sticker.scale();
       float render_id = sticker.renderid();
       // Set all vector data with sticker attributes
       initial_anchor_data.emplace_back(initial_anchor);
@@ -120,18 +118,18 @@ class StickerManagerCalculator : public CalculatorBase {
     if (cc->Outputs().HasTag(kUserRotationsTag)) {
       cc->Outputs()
           .Tag(kUserRotationsTag)
-          .AddPacket(MakePacket<std::vector<UserRotation>>(user_rotation_data)
+          .AddPacket(MakePacket<std::vector<float>>(user_rotation_data)
                          .At(cc->InputTimestamp()));
     }
     if (cc->Outputs().HasTag(kUserScalingsTag)) {
       cc->Outputs()
           .Tag(kUserScalingsTag)
-          .AddPacket(MakePacket<std::vector<UserScaling>>(user_scaling_data)
+          .AddPacket(MakePacket<std::vector<float>>(user_scaling_data)
                          .At(cc->InputTimestamp()));
     }
-    if (cc->Outputs().HasTag(kRenderDescriptorsTag)) {
+    if (cc->Outputs().HasTag(kRendersTag)) {
       cc->Outputs()
-          .Tag(kRenderDescriptorsTag)
+          .Tag(kRendersTag)
           .AddPacket(
               MakePacket<std::vector<int>>(render_data)
                   .At(cc->InputTimestamp()));

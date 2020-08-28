@@ -18,13 +18,17 @@
 # Images in/out of graph with tracked and scaled normalized anchor data
 type: "RegionTrackingSubgraph"
 input_stream: "VIDEO:input_video"
+input_stream: "IMU_ROTATION:imu_rotation_matrix"
 input_stream: "SENTINEL:sticker_sentinel"
 input_stream: "ANCHORS:initial_anchor_data"
-output_stream: "ANCHORS:tracked_scaled_anchor_data"
+output_stream: "MATRICES:model_matrices"
+input_side_packet: "FOV:vertical_fov_radians"
+input_side_packet: "ASPECT_RATIO:aspect_ratio"
 
 # Manages the anchors and tracking if user changes/adds/deletes anchors
 node {
  calculator: "TrackedAnchorManagerCalculator"
+ input_stream: "IMU_ROTATION:imu_rotation_matrix"
  input_stream: "SENTINEL:sticker_sentinel"
  input_stream: "ANCHORS:initial_anchor_data"
  input_stream: "BOXES:boxes"
@@ -34,7 +38,9 @@ node {
  }
  output_stream: "START_POS:start_pos"
  output_stream: "CANCEL_ID:cancel_object_id"
- output_stream: "ANCHORS:tracked_scaled_anchor_data"
+ output_stream: "MATRICES:model_matrices"
+ input_side_packet: "FOV:vertical_fov_radians"
+ input_side_packet: "ASPECT_RATIO:aspect_ratio"
 }
 
 # Subgraph performs anchor placement and tracking

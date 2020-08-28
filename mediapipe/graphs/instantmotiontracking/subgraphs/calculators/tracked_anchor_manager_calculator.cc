@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <memory>
+#include <cmath>
+#include "Eigen/Dense"
+#include "Eigen/src/Core/util/Constants.h"
+#include "Eigen/src/Geometry/Quaternion.h"
 #include "mediapipe/framework/calculator_framework.h"
 #include "mediapipe/framework/formats/detection.pb.h"
 #include "mediapipe/framework/formats/location_data.pb.h"
@@ -21,23 +26,40 @@
 #include "mediapipe/graphs/instantmotiontracking/calculators/transformations.h"
 
 namespace mediapipe {
-
+using Matrix4fCM = Eigen::Matrix<float, 4, 4, Eigen::ColMajor>;
+using Vector3f = Eigen::Vector3f;
+using Matrix3f = Eigen::Matrix3f;
+constexpr char kIMUMatrixTag[] = "IMU_ROTATION";
 constexpr char kSentinelTag[] = "SENTINEL";
 constexpr char kAnchorsTag[] = "ANCHORS";
 constexpr char kBoxesInputTag[] = "BOXES";
 constexpr char kBoxesOutputTag[] = "START_POS";
+constexpr char kMatricesTag[] = "MATRICES";
 constexpr char kCancelTag[] = "CANCEL_ID";
+constexpr char kFOVSidePacketTag[] = "FOV";
+constexpr char kAspectRatioSidePacketTag[] = "ASPECT_RATIO";
 // TODO: Find optimal Height/Width (0.1-0.3)
-constexpr float kBoxEdgeSize = 0.2f; // Used to establish tracking box dimensions
-constexpr float kUsToMs = 1000.0f; // Used to convert from microseconds to millis
+// Used to establish tracking box dimensions
+constexpr float kBoxEdgeSize = 0.2f;
+// Used to convert from microseconds to millis
+constexpr float kUsToMs = 1000.0f;
+// initial Z value (-10 is center point in visual range for OpenGL render)
+constexpr float kInitialZ = -10.0f;
+// Device properties that will be preset by side packets
+float vertical_fov_radians_ = 0.0f;
+float aspect_ratio_ = 0.0f;
 
-// This calculator manages the regions being tracked for each individual sticker
 // and adjusts the regions being tracked if a change is detected in a sticker's
 // initial anchor placement. Regions being tracked that have no associated sticker
 // will be automatically removed upon the next iteration of the graph to optimize
 // performance and remove all sticker artifacts
 //
+// Input Side Packets:
+//  FOV - Vertical field of view for device [REQUIRED - Defines perspective matrix]
+//  ASPECT_RATIO - Aspect ratio of device [REQUIRED - Defines perspective matrix]
+//
 // Input:
+//  IMU_ROTATION - float[9] of row-major device rotation matrix [REQUIRED]
 //  SENTINEL - ID of sticker which has an anchor that must be reset (-1 when no
 // anchor must be reset) [REQUIRED]
 //  ANCHORS - Initial anchor data (tracks changes and where to re/position) [REQUIRED]
@@ -46,11 +68,12 @@ constexpr float kUsToMs = 1000.0f; // Used to convert from microseconds to milli
 // Output:
 //  START_POS - Positions of boxes being tracked (can be overwritten with ID) [REQUIRED]
 //  CANCEL_ID - Single integer ID of tracking box to remove from tracker subgraph [OPTIONAL]
-//  ANCHORS - Updated set of anchors with tracked and normalized X,Y,Z [REQUIRED]
+//  MATRICES - Model matrices with rotation and translation [REQUIRED]
 //
 // Example config:
 // node {
 //   calculator: "TrackedAnchorManagerCalculator"
+//   input_stream: "IMU_ROTATION:imu_rotation_matrix"
 //   input_stream: "SENTINEL:sticker_sentinel"
 //   input_stream: "ANCHORS:initial_anchor_data"
 //   input_stream: "BOXES:boxes"
@@ -60,7 +83,9 @@ constexpr float kUsToMs = 1000.0f; // Used to convert from microseconds to milli
 //   }
 //   output_stream: "START_POS:start_pos"
 //   output_stream: "CANCEL_ID:cancel_object_id"
-//   output_stream: "ANCHORS:tracked_scaled_anchor_data"
+//   output_stream: "MATRICES:model_matrices"
+//  input_side_packet: "FOV:vertical_fov_radians"
+//  input_side_packet: "ASPECT_RATIO:aspect_ratio"
 // }
 
 class TrackedAnchorManagerCalculator : public CalculatorBase {
@@ -68,21 +93,73 @@ private:
   // Previous graph iteration anchor data
   std::vector<Anchor> previous_anchor_data;
 
+  // Generates a model matrix via Eigen with appropriate transformations
+  const Matrix4fCM GenerateEigenModelMatrix(
+      Vector3f translation_vector, Matrix3f rotation_submatrix) {
+    // Define basic empty model matrix
+    Matrix4fCM mvp_matrix;
+
+    // Set the translation vector
+    mvp_matrix.topRightCorner<3, 1>() = translation_vector;
+
+    // Set the rotation submatrix
+    mvp_matrix.topLeftCorner<3, 3>() = rotation_submatrix;
+
+    // Set trailing 1.0 required by OpenGL to define coordinate space
+    mvp_matrix(3,3) = 1.0f;
+
+    return mvp_matrix;
+  }
+
+  // TODO: Investigate possible differences in warping of tracking speed across screen
+  // Using the sticker anchor data, a translation vector can be generated in OpenGL coordinate space
+  const Vector3f GenerateAnchorVector(const Anchor tracked_anchor) {
+    // Using an initial z-value in OpenGL space, generate a new base z-axis value to mimic scaling by distance.
+    const float z = kInitialZ * tracked_anchor.z;
+
+    // Using triangle geometry, the minimum for a y-coordinate that will appear in the view field
+    // for the given z value above can be found.
+    const float y_half_range = z * (tan(vertical_fov_radians_ * 0.5f));
+
+    // The aspect ratio of the device and y_minimum calculated above can be used to find the
+    // minimum value for x that will appear in the view field of the device screen.
+    const float x_half_range = y_half_range * aspect_ratio_;
+
+    // Given the minimum bounds of the screen in OpenGL space, the tracked anchor coordinates
+    // can be converted to OpenGL coordinate space.
+    //
+    // (i.e: X and Y will be converted from [0.0-1.0] space to [x_minimum, -x_minimum] space
+    // and [y_minimum, -y_minimum] space respectively)
+    const float x = (-2.0f * tracked_anchor.x * x_half_range) + x_half_range;
+    const float y = (-2.0f * tracked_anchor.y * y_half_range) + y_half_range;
+
+    // A translation transformation vector can be generated via Eigen
+    const Vector3f t_vector(x,y,z);
+    return t_vector;
+  }
+
 public:
   static ::mediapipe::Status GetContract(CalculatorContract* cc) {
     RET_CHECK(cc->Inputs().HasTag(kAnchorsTag)
-      && cc->Inputs().HasTag(kSentinelTag));
-    RET_CHECK(cc->Outputs().HasTag(kAnchorsTag)
-      && cc->Outputs().HasTag(kBoxesOutputTag));
+      && cc->Inputs().HasTag(kSentinelTag)
+      && cc->Inputs().HasTag(kIMUMatrixTag)
+      && cc->InputSidePackets().HasTag(kFOVSidePacketTag)
+      && cc->InputSidePackets().HasTag(kAspectRatioSidePacketTag));
+    RET_CHECK(cc->Outputs().HasTag(kBoxesOutputTag)
+      && cc->Outputs().HasTag(kMatricesTag));
 
     cc->Inputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
     cc->Inputs().Tag(kSentinelTag).Set<int>();
+    cc->Inputs().Tag(kIMUMatrixTag).Set<float[]>();
 
     if (cc->Inputs().HasTag(kBoxesInputTag)) {
       cc->Inputs().Tag(kBoxesInputTag).Set<TimedBoxProtoList>();
     }
 
-    cc->Outputs().Tag(kAnchorsTag).Set<std::vector<Anchor>>();
+    cc->InputSidePackets().Tag(kFOVSidePacketTag).Set<float>();
+    cc->InputSidePackets().Tag(kAspectRatioSidePacketTag).Set<float>();
+
+    cc->Outputs().Tag(kMatricesTag).Set<std::vector<Matrix4fCM>>();
     cc->Outputs().Tag(kBoxesOutputTag).Set<TimedBoxProtoList>();
 
     if (cc->Outputs().HasTag(kCancelTag)) {
@@ -93,6 +170,9 @@ public:
   }
 
   ::mediapipe::Status Open(CalculatorContext* cc) override {
+    // Set device properties from side packets
+    vertical_fov_radians_ = cc->InputSidePackets().Tag(kFOVSidePacketTag).Get<float>();
+    aspect_ratio_ = cc->InputSidePackets().Tag(kAspectRatioSidePacketTag).Get<float>();
     return ::mediapipe::OkStatus();
   }
 
@@ -106,6 +186,19 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
   std::vector<Anchor> current_anchor_data = cc->Inputs().Tag(kAnchorsTag).Get<std::vector<Anchor>>();
   auto pos_boxes = absl::make_unique<TimedBoxProtoList>();
   std::vector<Anchor> tracked_scaled_anchor_data;
+  std::vector<Matrix4fCM> final_matrices_data;
+
+  // Device IMU rotation submatrix
+  const auto imu_matrix = cc->Inputs().Tag(kIMUMatrixTag).Get<float[]>();
+  Matrix3f imu_rotation_submatrix;
+  int idx = 0;
+  for (int x = 0; x < 3; x++) {
+    for (int y = 0; y < 3; y++) {
+      // Input matrix is row-major matrix, it must be reformatted to column-major
+      // via transpose procedure
+      imu_rotation_submatrix(y, x) = imu_matrix[idx++];
+    }
+  }
 
   // Delete any boxes being tracked without an associated anchor
   for (const TimedBoxProto& box : cc->Inputs().Tag(kBoxesInputTag)
@@ -152,7 +245,7 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
           anchor.x = (box.left() + box.right()) * 0.5f;
           // Get center y normalized coordinate [0.0-1.0]
           anchor.y = (box.top() + box.bottom()) * 0.5f;
-          // Get center z coordinate [z starts at normalized 1.0 and scales 
+          // Get center z coordinate [z starts at normalized 1.0 and scales
           // inversely with box-width]
           // TODO: Look into issues with uniform scaling on x-axis and y-axis
           anchor.z = kBoxEdgeSize / (box.right() - box.left());
@@ -183,11 +276,15 @@ REGISTER_CALCULATOR(TrackedAnchorManagerCalculator);
       }
     }
     tracked_scaled_anchor_data.emplace_back(anchor);
+    // A vector representative of the translation of the object in OpenGL coordinate space must be generated
+    const Vector3f translation_vector = GenerateAnchorVector(anchor);
+    Matrix4fCM matrix = GenerateEigenModelMatrix(translation_vector, imu_rotation_submatrix);
+    final_matrices_data.emplace_back(matrix);
   }
   // Set anchor data for next iteration
   previous_anchor_data = tracked_scaled_anchor_data;
 
-  cc->Outputs().Tag(kAnchorsTag).AddPacket(MakePacket<std::vector<Anchor>>(tracked_scaled_anchor_data).At(cc->InputTimestamp()));
+  cc->Outputs().Tag(kMatricesTag).AddPacket(MakePacket<std::vector<Matrix4fCM>>(final_matrices_data).At(cc->InputTimestamp()));
   cc->Outputs().Tag(kBoxesOutputTag).Add(pos_boxes.release(), cc->InputTimestamp());
 
   return ::mediapipe::OkStatus();
