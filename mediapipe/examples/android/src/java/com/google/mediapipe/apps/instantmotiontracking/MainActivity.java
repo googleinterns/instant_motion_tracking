@@ -146,6 +146,18 @@ public class MainActivity extends AppCompatActivity {
   private Bitmap defaultGIFTexture = null; // Texture sent if no gif available
   private float gifAspectRatio = 1.0f; // GIF width:height
 
+  private String[] gif_links = {
+"https://i.ibb.co/R4gnWZn/waterfall-1.gif",
+"https://i.ibb.co/5KcWKYJ/waterfall-2.gif",
+"https://i.ibb.co/M8NXkcd/penguin-hd.gif",
+"https://i.ibb.co/LJKFHWX/mom-daughter-dance.gif",
+"https://i.ibb.co/QnkyyyY/elephants-hd.gif",
+"https://i.ibb.co/k8QLdtb/jellyfish-hd.gif",
+"https://i.ibb.co/yVrvv2g/robot-neon-original.gif",
+"https://i.ibb.co/VgXJWcN/2020-08-25-21-24-16-unscreen.gif",
+"https://i.ibb.co/wpYY8Zd/ballerina-original.gif"};
+  private int gif_idx = 0;
+
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -392,9 +404,11 @@ public class MainActivity extends AppCompatActivity {
             new View.OnClickListener() {
               public void onClick(View v) {
                 // Clear the text field to prevent text artifacts in GIF selection
-                editText.setText("");
+                //editText.setText("");
                 // Open the Keyboard to allow user input
-                openKeyboard();
+                //openKeyboard();
+                gif_idx = (gif_idx + 1) % gif_links.length;
+                setGIFBitmaps(gif_links[gif_idx]);
               }
             });
         buttonLayout.addView(gifSearch);
